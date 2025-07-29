@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.lee.quickgallery.ui.MainScreen
 import com.lee.quickgallery.ui.PermissionScreen
+import com.lee.quickgallery.ui.SettingScreen
 import com.lee.quickgallery.ui.SplashScreen
 import com.lee.quickgallery.ui.theme.QuickGalleryTheme
 
@@ -51,7 +52,18 @@ fun QuickGalleryApp() {
             )
         }
         Screen.Main -> {
-            MainScreen()
+            MainScreen(
+                onSettingsClick = {
+                    currentScreen = Screen.Settings
+                }
+            )
+        }
+        Screen.Settings -> {
+            SettingScreen(
+                onBackClick = {
+                    currentScreen = Screen.Main
+                }
+            )
         }
     }
 }
@@ -60,4 +72,5 @@ sealed class Screen {
     object Splash : Screen()
     object Permission : Screen()
     object Main : Screen()
+    object Settings : Screen()
 }
