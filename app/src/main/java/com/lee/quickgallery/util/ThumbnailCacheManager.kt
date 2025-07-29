@@ -79,9 +79,25 @@ class ThumbnailCacheManager(private val context: Context) {
             if (bitmap != null) {
                 val cacheFile = getCacheFile(mediaId)
                 saveBitmapToFile(bitmap, cacheFile)
+                Timber.tag(TAG).d("비디오 썸네일 생성 성공: $mediaId")
                 Uri.fromFile(cacheFile)
             } else {
-                null
+                // 첫 번째 프레임이 실패하면 다른 시간에서 시도
+                Timber.tag(TAG).w("첫 번째 프레임 추출 실패, 다른 시간에서 시도: $mediaId")
+                val retriever2 = MediaMetadataRetriever()
+                retriever2.setDataSource(context, mediaUri)
+                val bitmap2 = retriever2.frameAtTime // 매개변수 없이 호출
+                retriever2.release()
+                
+                if (bitmap2 != null) {
+                    val cacheFile = getCacheFile(mediaId)
+                    saveBitmapToFile(bitmap2, cacheFile)
+                    Timber.tag(TAG).d("비디오 썸네일 생성 성공 (재시도): $mediaId")
+                    Uri.fromFile(cacheFile)
+                } else {
+                    Timber.tag(TAG).w("비디오에서 썸네일을 추출할 수 없습니다: $mediaId")
+                    null
+                }
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "비디오 썸네일 생성 실패: $mediaId")

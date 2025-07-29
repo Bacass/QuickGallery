@@ -443,7 +443,19 @@ class MediaStoreUtil(private val context: Context) {
      */
     suspend fun getVideoThumbnail(mediaItem: MediaItem): Uri? {
         return if (mediaItem.mimeType.startsWith("video/")) {
-            thumbnailCacheManager.getThumbnail(mediaItem.uri, mediaItem.id)
+            try {
+                Timber.tag(TAG).d("비디오 썸네일 요청: ${mediaItem.id}")
+                val thumbnail = thumbnailCacheManager.getThumbnail(mediaItem.uri, mediaItem.id)
+                if (thumbnail != null) {
+                    Timber.tag(TAG).d("비디오 썸네일 로드 성공: ${mediaItem.id}")
+                } else {
+                    Timber.tag(TAG).w("비디오 썸네일 로드 실패: ${mediaItem.id}")
+                }
+                thumbnail
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "비디오 썸네일 가져오기 실패: ${mediaItem.id}")
+                null
+            }
         } else {
             null
         }

@@ -43,11 +43,22 @@ fun FolderThumbnail(
     val context = LocalContext.current
     val mediaStoreUtil = remember { MediaStoreUtil(context) }
     var thumbnailUri by remember { mutableStateOf<Uri?>(folderItem.thumbnailUri) }
+    var isLoadingVideoThumbnail by remember { mutableStateOf(false) }
     
     // 비디오인 경우 지연 로딩으로 썸네일 가져오기
     LaunchedEffect(folderItem.latestMedia.id) {
-        if (folderItem.latestMedia.mimeType.startsWith("video/") && thumbnailUri == null) {
-            thumbnailUri = mediaStoreUtil.getVideoThumbnail(folderItem.latestMedia)
+        if (folderItem.latestMedia.mimeType.startsWith("video/")) {
+            isLoadingVideoThumbnail = true
+            try {
+                val videoThumbnail = mediaStoreUtil.getVideoThumbnail(folderItem.latestMedia)
+                if (videoThumbnail != null) {
+                    thumbnailUri = videoThumbnail
+                }
+            } catch (e: Exception) {
+                // 썸네일 로딩 실패 시 원본 URI 유지
+            } finally {
+                isLoadingVideoThumbnail = false
+            }
         }
     }
     Card(
@@ -80,7 +91,18 @@ fun FolderThumbnail(
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            // 로딩 플레이스홀더
+                            // 로딩 상태 표시
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // 에러 상태 표시
                         }
                     }
                 )
