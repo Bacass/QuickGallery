@@ -221,6 +221,12 @@ class MediaStoreUtil(private val context: Context) {
         val media = mutableListOf<MediaItem>()
         
         try {
+            Timber.tag(TAG).d("폴더별 미디어 조회 시작: $folderPath")
+            
+            // 폴더 경로 정규화 (끝에 슬래시가 있으면 제거)
+            val normalizedFolderPath = folderPath.trimEnd('/')
+            Timber.tag(TAG).d("정규화된 폴더 경로: $normalizedFolderPath")
+            
             // 이미지 조회
             val imageCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -228,9 +234,19 @@ class MediaStoreUtil(private val context: Context) {
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI
             }
             
-            val imageSelection = "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%' AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
-            val imageSelectionArgs = arrayOf("%$folderPath%")
+            // Camera 폴더의 경우 다양한 경로 패턴 시도
+            val imageSelection = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?)"
+            } else {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} = ?)"
+            }
+            val imageSelectionArgs = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                arrayOf("%Camera%", "%DCIM/Camera%", "%Pictures/Camera%")
+            } else {
+                arrayOf(normalizedFolderPath, "$normalizedFolderPath/")
+            }
             
+            Timber.tag(TAG).d("이미지 쿼리: $imageSelection, args: ${imageSelectionArgs.joinToString()}")
             context.contentResolver.query(
                 imageCollection,
                 PROJECTION,
@@ -238,8 +254,44 @@ class MediaStoreUtil(private val context: Context) {
                 imageSelectionArgs,
                 "${MediaStore.MediaColumns.DATE_ADDED} DESC"
             )?.use { cursor ->
-                // 이미지 처리 로직 (위와 동일)
-                // ... 생략 ...
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+                val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+                val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
+                val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val name = cursor.getString(nameColumn)
+                    val size = cursor.getLong(sizeColumn)
+                    val dateAdded = cursor.getLong(dateAddedColumn)
+                    val dateModified = cursor.getLong(dateModifiedColumn)
+                    val mimeType = cursor.getString(mimeTypeColumn)
+                    val width = cursor.getInt(widthColumn)
+                    val height = cursor.getInt(heightColumn)
+                    val relativePath = cursor.getString(relativePathColumn) ?: ""
+                    
+                    val contentUri = ContentUris.withAppendedId(imageCollection, id)
+                    
+                    media.add(
+                        MediaItem(
+                            id = id,
+                            uri = contentUri,
+                            name = name,
+                            size = size,
+                            dateAdded = dateAdded,
+                            dateModified = dateModified,
+                            mimeType = mimeType,
+                            width = width,
+                            height = height,
+                            relativePath = relativePath
+                        )
+                    )
+                }
             }
             
             // 비디오 조회
@@ -249,9 +301,19 @@ class MediaStoreUtil(private val context: Context) {
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI
             }
             
-            val videoSelection = "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'video/%' AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
-            val videoSelectionArgs = arrayOf("%$folderPath%")
+            // Camera 폴더의 경우 다양한 경로 패턴 시도
+            val videoSelection = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'video/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?)"
+            } else {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'video/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} = ?)"
+            }
+            val videoSelectionArgs = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                arrayOf("%Camera%", "%DCIM/Camera%", "%Pictures/Camera%")
+            } else {
+                arrayOf(normalizedFolderPath, "$normalizedFolderPath/")
+            }
             
+            Timber.tag(TAG).d("비디오 쿼리: $videoSelection, args: ${videoSelectionArgs.joinToString()}")
             context.contentResolver.query(
                 videoCollection,
                 VIDEO_PROJECTION,
@@ -259,9 +321,50 @@ class MediaStoreUtil(private val context: Context) {
                 videoSelectionArgs,
                 "${MediaStore.MediaColumns.DATE_ADDED} DESC"
             )?.use { cursor ->
-                // 비디오 처리 로직 (위와 동일)
-                // ... 생략 ...
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+                val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+                val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
+                val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val name = cursor.getString(nameColumn)
+                    val size = cursor.getLong(sizeColumn)
+                    val dateAdded = cursor.getLong(dateAddedColumn)
+                    val dateModified = cursor.getLong(dateModifiedColumn)
+                    val mimeType = cursor.getString(mimeTypeColumn)
+                    val width = cursor.getInt(widthColumn)
+                    val height = cursor.getInt(heightColumn)
+                    val relativePath = cursor.getString(relativePathColumn) ?: ""
+                    val duration = cursor.getLong(durationColumn)
+                    
+                    val contentUri = ContentUris.withAppendedId(videoCollection, id)
+                    
+                    media.add(
+                        MediaItem(
+                            id = id,
+                            uri = contentUri,
+                            name = name,
+                            size = size,
+                            dateAdded = dateAdded,
+                            dateModified = dateModified,
+                            mimeType = mimeType,
+                            width = width,
+                            height = height,
+                            relativePath = relativePath,
+                            duration = duration
+                        )
+                    )
+                }
             }
+            
+            Timber.tag(TAG).d("폴더별 미디어 조회 완료: ${media.size}개")
             
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "폴더별 미디어 조회 중 오류 발생")

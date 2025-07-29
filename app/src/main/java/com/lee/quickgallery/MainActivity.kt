@@ -15,6 +15,7 @@ import com.lee.quickgallery.ui.MainScreen
 import com.lee.quickgallery.ui.PermissionScreen
 import com.lee.quickgallery.ui.SettingScreen
 import com.lee.quickgallery.ui.SplashScreen
+import com.lee.quickgallery.ui.SubListScreen
 import com.lee.quickgallery.ui.theme.QuickGalleryTheme
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun QuickGalleryApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
+    var selectedFolderPath by remember { mutableStateOf<String?>(null) }
     
     when (currentScreen) {
         Screen.Splash -> {
@@ -53,10 +55,27 @@ fun QuickGalleryApp() {
         }
         Screen.Main -> {
             MainScreen(
+                onFolderClick = { folderPath ->
+                    selectedFolderPath = folderPath
+                    currentScreen = Screen.SubList
+                },
                 onSettingsClick = {
                     currentScreen = Screen.Settings
                 }
             )
+        }
+        Screen.SubList -> {
+            selectedFolderPath?.let { folderPath ->
+                SubListScreen(
+                    folderPath = folderPath,
+                    onBackClick = {
+                        currentScreen = Screen.Main
+                    },
+                    onMediaClick = { mediaUri ->
+                        // 미디어 클릭 시 처리 (예: 상세 보기, 공유 등)
+                    }
+                )
+            }
         }
         Screen.Settings -> {
             SettingScreen(
@@ -72,5 +91,6 @@ sealed class Screen {
     object Splash : Screen()
     object Permission : Screen()
     object Main : Screen()
+    object SubList : Screen()
     object Settings : Screen()
 }

@@ -17,8 +17,8 @@ class ThumbnailCacheManager(private val context: Context) {
     companion object {
         private const val TAG = "ThumbnailCache"
         private const val CACHE_DIR_NAME = "thumbnails"
-        private const val BASE_CACHE_SIZE = 30 * 1024 * 1024 // 30MB 기본
-        private const val CACHE_SIZE_PER_1000_IMAGES = 30 * 1024 * 1024 // 1000장당 30MB 추가
+        private const val BASE_CACHE_SIZE = 50 * 1024 * 1024 // 50MB 기본
+        private const val CACHE_SIZE_PER_1000_IMAGES = 40 * 1024 * 1024 // 1000장당 40MB 추가
     }
     
     private var maxCacheSize = BASE_CACHE_SIZE
