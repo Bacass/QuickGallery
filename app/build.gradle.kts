@@ -56,4 +56,13 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // timber
+    implementation(libs.timber)
+
+    // kotpref
+    implementation(libs.kotpref)
+    
+    // coil for image loading
+    implementation(libs.coil.compose)
 }
