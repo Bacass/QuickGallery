@@ -28,6 +28,7 @@ data class MediaItem(
 )
 
 class MediaStoreUtil(private val context: Context) {
+    val thumbnailCacheManager = ThumbnailCacheManager(context)
     
     companion object {
         private const val TAG = "MediaStoreUtil"
@@ -167,9 +168,6 @@ class MediaStoreUtil(private val context: Context) {
                     
                     val contentUri = ContentUris.withAppendedId(collection, id)
                     
-                    // 비디오 썸네일 생성
-                    val thumbnailUri = generateVideoThumbnail(contentUri)
-                    
                     videos.add(
                         MediaItem(
                             id = id,
@@ -183,7 +181,7 @@ class MediaStoreUtil(private val context: Context) {
                             height = height,
                             relativePath = relativePath,
                             duration = duration,
-                            thumbnailUri = thumbnailUri
+                            thumbnailUri = null // 지연 로딩으로 처리
                         )
                     )
                 }
@@ -273,6 +271,40 @@ class MediaStoreUtil(private val context: Context) {
     }
     
     /**
+     * 전체 이미지 수를 조회합니다.
+     */
+    suspend fun getTotalImageCount(): Int = withContext(Dispatchers.IO) {
+        var totalCount = 0
+        
+        try {
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+            
+            val selection = "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%'"
+            
+            context.contentResolver.query(
+                collection,
+                arrayOf("COUNT(*)"),
+                selection,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    totalCount = cursor.getInt(0)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "이미지 수 조회 중 오류 발생")
+        }
+        
+        Timber.tag(TAG).d("총 이미지 수: ${totalCount}장")
+        totalCount
+    }
+    
+    /**
      * 폴더별로 그룹화된 미디어를 조회합니다.
      */
     suspend fun getMediaGroupedByFolder(): Map<String, List<MediaItem>> = withContext(Dispatchers.IO) {
@@ -304,44 +336,12 @@ class MediaStoreUtil(private val context: Context) {
     }
     
     /**
-     * 비디오에서 썸네일을 생성합니다.
+     * 비디오 썸네일을 가져옵니다 (지연 로딩).
      */
-    private suspend fun generateVideoThumbnail(videoUri: Uri): Uri? = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, videoUri)
-            
-            // 비디오의 첫 번째 프레임을 썸네일로 사용
-            val bitmap = retriever.frameAtTime
-            retriever.release()
-            
-            if (bitmap != null) {
-                // 썸네일을 캐시에 저장하고 URI 반환
-                saveThumbnailToCache(bitmap, videoUri.toString())
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "비디오 썸네일 생성 중 오류")
-            null
-        }
-    }
-    
-    /**
-     * 썸네일을 캐시에 저장합니다.
-     */
-    private fun saveThumbnailToCache(bitmap: Bitmap, originalUri: String): Uri? {
-        return try {
-            val fileName = "thumb_${originalUri.hashCode()}.jpg"
-            val file = java.io.File(context.cacheDir, fileName)
-            
-            file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
-            }
-            
-            Uri.fromFile(file)
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "썸네일 캐시 저장 중 오류")
+    suspend fun getVideoThumbnail(mediaItem: MediaItem): Uri? {
+        return if (mediaItem.mimeType.startsWith("video/")) {
+            thumbnailCacheManager.getThumbnail(mediaItem.uri, mediaItem.id)
+        } else {
             null
         }
     }

@@ -90,6 +90,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _errorMessage.value = null
                 
                 Timber.tag(TAG).d("폴더 로딩 시작")
+                
+                // 이미지 수에 따라 캐시 크기 설정
+                val totalImageCount = mediaStoreUtil.getTotalImageCount()
+                mediaStoreUtil.thumbnailCacheManager.setCacheSizeBasedOnImageCount(totalImageCount)
+                
                 val folderMap = mediaStoreUtil.getMediaGroupedByFolder()
                 
                 val folderItems = folderMap.mapNotNull { (folderPath, mediaList) ->
