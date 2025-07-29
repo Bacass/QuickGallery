@@ -27,7 +27,11 @@ data class FolderItem(
         }
         
         private fun getFolderNameFromPath(path: String): String {
-            return path.substringAfterLast('/', "")
+            return if (path.isEmpty()) {
+                "Unknown"
+            } else {
+                path.substringAfterLast('/', path)
+            }
         }
     }
 } 

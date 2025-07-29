@@ -19,6 +19,7 @@ data class MediaItem(
     val mimeType: String,
     val width: Int,
     val height: Int,
+    val relativePath: String,
     val duration: Long? = null // 비디오인 경우에만 사용
 )
 
@@ -36,7 +37,8 @@ class MediaStoreUtil(private val context: Context) {
             MediaStore.MediaColumns.DATE_MODIFIED,
             MediaStore.MediaColumns.MIME_TYPE,
             MediaStore.MediaColumns.WIDTH,
-            MediaStore.MediaColumns.HEIGHT
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.RELATIVE_PATH
         )
         
         // 비디오용 추가 컬럼
@@ -74,6 +76,7 @@ class MediaStoreUtil(private val context: Context) {
                 val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
                 val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
                 val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
                 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
@@ -84,6 +87,7 @@ class MediaStoreUtil(private val context: Context) {
                     val mimeType = cursor.getString(mimeTypeColumn)
                     val width = cursor.getInt(widthColumn)
                     val height = cursor.getInt(heightColumn)
+                    val relativePath = cursor.getString(relativePathColumn) ?: ""
                     
                     val contentUri = ContentUris.withAppendedId(collection, id)
                     
@@ -97,7 +101,8 @@ class MediaStoreUtil(private val context: Context) {
                             dateModified = dateModified,
                             mimeType = mimeType,
                             width = width,
-                            height = height
+                            height = height,
+                            relativePath = relativePath
                         )
                     )
                 }
@@ -141,6 +146,7 @@ class MediaStoreUtil(private val context: Context) {
                 val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
                 val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
                 val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 
                 while (cursor.moveToNext()) {
@@ -152,6 +158,7 @@ class MediaStoreUtil(private val context: Context) {
                     val mimeType = cursor.getString(mimeTypeColumn)
                     val width = cursor.getInt(widthColumn)
                     val height = cursor.getInt(heightColumn)
+                    val relativePath = cursor.getString(relativePathColumn) ?: ""
                     val duration = cursor.getLong(durationColumn)
                     
                     val contentUri = ContentUris.withAppendedId(collection, id)
@@ -167,6 +174,7 @@ class MediaStoreUtil(private val context: Context) {
                             mimeType = mimeType,
                             width = width,
                             height = height,
+                            relativePath = relativePath,
                             duration = duration
                         )
                     )
@@ -268,7 +276,7 @@ class MediaStoreUtil(private val context: Context) {
             
             // 폴더별로 그룹화
             allMedia.forEach { mediaItem ->
-                val folderPath = getFolderPathFromUri(mediaItem.uri)
+                val folderPath = getFolderPathFromRelativePath(mediaItem.relativePath)
                 if (folderPath.isNotEmpty()) {
                     folderMap.getOrPut(folderPath) { mutableListOf() }.add(mediaItem)
                 }
@@ -288,19 +296,20 @@ class MediaStoreUtil(private val context: Context) {
     }
     
     /**
-     * URI에서 폴더 경로를 추출합니다.
+     * RELATIVE_PATH에서 폴더 경로를 추출합니다.
      */
-    private fun getFolderPathFromUri(uri: Uri): String {
+    private fun getFolderPathFromRelativePath(relativePath: String): String {
         return try {
-            val path = uri.path ?: return ""
-            val lastSlashIndex = path.lastIndexOf('/')
-            if (lastSlashIndex > 0) {
-                path.substring(0, lastSlashIndex)
-            } else {
-                ""
-            }
+            if (relativePath.isEmpty()) return ""
+            
+            // RELATIVE_PATH는 "Pictures/Instagram/" 형태
+            // 마지막 슬래시를 제거하고 폴더명만 반환
+            val trimmedPath = relativePath.trimEnd('/')
+            if (trimmedPath.isEmpty()) return ""
+            
+            trimmedPath
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "URI에서 폴더 경로 추출 중 오류")
+            Timber.tag(TAG).e(e, "RELATIVE_PATH에서 폴더 경로 추출 중 오류")
             ""
         }
     }
