@@ -2,6 +2,9 @@ package com.lee.quickgallery.util
 
 import android.content.ContentUris
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -20,7 +23,8 @@ data class MediaItem(
     val width: Int,
     val height: Int,
     val relativePath: String,
-    val duration: Long? = null // 비디오인 경우에만 사용
+    val duration: Long? = null, // 비디오인 경우에만 사용
+    val thumbnailUri: Uri? = null // 썸네일 URI (비디오인 경우)
 )
 
 class MediaStoreUtil(private val context: Context) {
@@ -163,6 +167,9 @@ class MediaStoreUtil(private val context: Context) {
                     
                     val contentUri = ContentUris.withAppendedId(collection, id)
                     
+                    // 비디오 썸네일 생성
+                    val thumbnailUri = generateVideoThumbnail(contentUri)
+                    
                     videos.add(
                         MediaItem(
                             id = id,
@@ -175,7 +182,8 @@ class MediaStoreUtil(private val context: Context) {
                             width = width,
                             height = height,
                             relativePath = relativePath,
-                            duration = duration
+                            duration = duration,
+                            thumbnailUri = thumbnailUri
                         )
                     )
                 }
@@ -293,6 +301,49 @@ class MediaStoreUtil(private val context: Context) {
         
         Timber.tag(TAG).d("총 ${folderMap.size}개의 폴더를 찾았습니다.")
         folderMap
+    }
+    
+    /**
+     * 비디오에서 썸네일을 생성합니다.
+     */
+    private suspend fun generateVideoThumbnail(videoUri: Uri): Uri? = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, videoUri)
+            
+            // 비디오의 첫 번째 프레임을 썸네일로 사용
+            val bitmap = retriever.frameAtTime
+            retriever.release()
+            
+            if (bitmap != null) {
+                // 썸네일을 캐시에 저장하고 URI 반환
+                saveThumbnailToCache(bitmap, videoUri.toString())
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "비디오 썸네일 생성 중 오류")
+            null
+        }
+    }
+    
+    /**
+     * 썸네일을 캐시에 저장합니다.
+     */
+    private fun saveThumbnailToCache(bitmap: Bitmap, originalUri: String): Uri? {
+        return try {
+            val fileName = "thumb_${originalUri.hashCode()}.jpg"
+            val file = java.io.File(context.cacheDir, fileName)
+            
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+            }
+            
+            Uri.fromFile(file)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "썸네일 캐시 저장 중 오류")
+            null
+        }
     }
     
     /**

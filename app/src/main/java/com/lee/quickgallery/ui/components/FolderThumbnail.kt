@@ -2,6 +2,7 @@ package com.lee.quickgallery.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -66,7 +67,7 @@ fun FolderThumbnail(
                     }
                 )
                 
-                // 그라데이션 오버레이 (텍스트 가독성을 위해)
+                // 하단 반투명 오버레이
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -75,39 +76,44 @@ fun FolderThumbnail(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.3f)
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.6f)
                                 ),
                                 startY = 0f,
-                                endY = 300f
+                                endY = 400f
                             )
                         )
                 )
-            }
-            
-            // 폴더 정보
-            Column(
-                modifier = Modifier.padding(12.dp)
-            ) {
-                Text(
-                    text = folderItem.folderName,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
                 
-                Text(
-                    text = "${folderItem.mediaCount}개 파일",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // 폴더 정보 (이미지 하단에 오버레이)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    Text(
+                        text = folderItem.folderName,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        ),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    Text(
+                        text = "${folderItem.mediaCount}",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.sp
+                        ),
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
