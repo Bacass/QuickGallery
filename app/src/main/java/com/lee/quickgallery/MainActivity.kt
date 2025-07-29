@@ -5,12 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.lee.quickgallery.ui.MainScreen
+import com.lee.quickgallery.ui.PermissionScreen
+import com.lee.quickgallery.ui.SplashScreen
 import com.lee.quickgallery.ui.theme.QuickGalleryTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,29 +22,42 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             QuickGalleryTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                QuickGalleryApp()
             }
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+fun QuickGalleryApp() {
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
+    
+    when (currentScreen) {
+        Screen.Splash -> {
+            SplashScreen(
+                onSplashComplete = {
+                    currentScreen = Screen.Permission
+                },
+                onPermissionAlreadyGranted = {
+                    currentScreen = Screen.Main
+                }
+            )
+        }
+        Screen.Permission -> {
+            PermissionScreen(
+                onPermissionGranted = {
+                    currentScreen = Screen.Main
+                }
+            )
+        }
+        Screen.Main -> {
+            MainScreen()
+        }
+    }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    QuickGalleryTheme {
-        Greeting("Android")
-    }
+sealed class Screen {
+    object Splash : Screen()
+    object Permission : Screen()
+    object Main : Screen()
 }
