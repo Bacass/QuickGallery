@@ -219,17 +219,50 @@ fun SubListScreen(
                     val gridState = rememberLazyGridState()
                     val coroutineScope = rememberCoroutineScope()
                     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd", Locale.getDefault()) }
+                    val density = LocalDensity.current
                     
                     // 스크롤바 표시 상태
                     var showScrollbar by remember { mutableStateOf(false) }
                     var isScrollbarDragging by remember { mutableStateOf(false) }
                     var showDatePopup by remember { mutableStateOf(false) }
+                    var containerHeightPx by remember { mutableStateOf(0f) }
                     
-                    // 스크롤바 상호작용 소스
-                    val scrollbarInteractionSource = remember { MutableInteractionSource() }
-                    val isScrollbarPressed by scrollbarInteractionSource.collectIsPressedAsState()
+                    // 스크롤 진행도 계산 (example.kt 방식)
+                    val scrollProgress by remember {
+                        derivedStateOf {
+                            val layoutInfo = gridState.layoutInfo
+                            val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
+                            if (visibleItem != null && mediaList.isNotEmpty()) {
+                                val scrollableRange = mediaList.size - 1
+                                if (scrollableRange > 0 && layoutInfo.viewportEndOffset > 0) {
+                                    val indexRatio = visibleItem.index.toFloat() / scrollableRange
+                                    val offsetRatio = visibleItem.offset.y.toFloat() / layoutInfo.viewportEndOffset.toFloat()
+                                    (indexRatio + offsetRatio).coerceIn(0f, 1f)
+                                } else {
+                                    0f
+                                }
+                            } else {
+                                0f
+                            }
+                        }
+                    }
                     
-                    // 스크롤 상태 감지 - 스크롤 중일 때 날짜 팝업 표시
+                    // 현재 날짜 계산
+                    val currentDate by remember {
+                        derivedStateOf {
+                            if (mediaList.isNotEmpty()) {
+                                val targetIndex = (scrollProgress * (mediaList.size - 1)).toInt()
+                                    .coerceIn(0, mediaList.size - 1)
+                                val mediaItem = mediaList[targetIndex]
+                                val date = Date(mediaItem.dateAdded * 1000)
+                                dateFormat.format(date)
+                            } else {
+                                ""
+                            }
+                        }
+                    }
+                    
+                    // 스크롤 상태 감지
                     LaunchedEffect(gridState) {
                         snapshotFlow { gridState.isScrollInProgress }
                             .collect { isScrolling ->
@@ -237,7 +270,6 @@ fun SubListScreen(
                                     showDatePopup = true
                                     showScrollbar = true
                                 } else {
-                                    // 스크롤이 끝나면 1.5초 후에 팝업과 스크롤바 숨김
                                     kotlinx.coroutines.delay(1500)
                                     if (!isScrollbarDragging) {
                                         showDatePopup = false
@@ -247,51 +279,27 @@ fun SubListScreen(
                             }
                     }
                     
-                    // thumb percentage에 해당하는 이미지의 날짜 계산
-                    val currentDate by remember {
-                        derivedStateOf {
-                            val layoutInfo = gridState.layoutInfo
-                            val visibleItems = layoutInfo.visibleItemsInfo
-                            
-                            if (visibleItems.isNotEmpty() && mediaList.isNotEmpty()) {
-                                val firstVisibleIndex = visibleItems.first().index
-                                val scrollableRange = mediaList.size - 1
-                                
-                                // 스크롤 진행률 계산
-                                val scrollProgress = if (scrollableRange > 0) {
-                                    (firstVisibleIndex.toFloat() / scrollableRange).coerceIn(0f, 1f)
-                                } else {
-                                    0f
-                                }
-                                
-                                // 진행률에 해당하는 이미지 인덱스 계산
-                                val targetIndex = (scrollProgress * (mediaList.size - 1)).toInt()
-                                    .coerceIn(0, mediaList.size - 1)
-                                
-                                if (targetIndex < mediaList.size) {
-                                    val mediaItem = mediaList[targetIndex]
-                                    val date = Date(mediaItem.dateAdded * 1000)
-                                    dateFormat.format(date)
-                                } else {
-                                    ""
-                                }
-                            } else {
-                                ""
-                            }
+                    // Thumb 높이 계산
+                    val baseThumbHeight = 60.dp
+                    val thumbHeightPx = with(density) {
+                        if (totalMediaCount > 0) {
+                            val ratio = mediaList.size.toFloat() / totalMediaCount
+                            (baseThumbHeight.value * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f).dp.toPx()
+                        } else {
+                            baseThumbHeight.toPx()
                         }
                     }
                     
-                    // 스크롤바는 항상 표시
-                    showScrollbar = true
-                    
-                    // 스크롤바 관련 변수들을 상위 스코프로 이동
-                    val density = LocalDensity.current
-                    var containerHeightPx by remember { mutableStateOf(0) }
+                    // Thumb 위치 계산
+                    val absoluteSafeRangePx = (containerHeightPx * 0.95f - thumbHeightPx).coerceAtLeast(0f)
+                    val thumbOffsetPx = (scrollProgress * absoluteSafeRangePx).coerceIn(0f, absoluteSafeRangePx)
+                    val thumbOffset = with(density) { thumbOffsetPx.toDp() }
                     
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
-                            state = gridState,
                             columns = GridCells.Fixed(3),
+                            state = gridState,
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -307,210 +315,104 @@ fun SubListScreen(
                             }
                         }
                         
-                        // 주소록 스타일 스크롤바 - 실제 크기 측정 방식
-                        
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 10.dp, top = 50.dp, bottom = 16.dp)
-                                .width(10.dp)
-                                .fillMaxHeight()
-                                .onGloballyPositioned { coordinates ->
-                                    containerHeightPx = coordinates.size.height
-                                }
-                        ) {
-                            // 실제 측정된 컨테이너 높이 (dp 단위로 변환)
-                            val containerHeightDp = with(density) { containerHeightPx.toDp().value }
-                            // 미디어 수 정보 표시 (스크롤 중이거나 드래그 중일 때)
-                            if ((showDatePopup || isScrollbarDragging) && totalMediaCount > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .offset(x = (-80).dp)
-                                        .wrapContentSize()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.Black.copy(alpha = 0.8f))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "${mediaList.size}/${totalMediaCount}",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-
-                            
-                            // 스크롤바 Thumb (현재 위치 표시) - 실제 로드된 미디어 기준으로 계산
-                            val scrollProgress by remember {
-                                derivedStateOf {
-                                    val layoutInfo = gridState.layoutInfo
-                                    val visibleItems = layoutInfo.visibleItemsInfo
-                                    
-                                    if (visibleItems.isNotEmpty() && mediaList.isNotEmpty()) {
-                                        val firstVisibleIndex = visibleItems.first().index
-                                        val scrollableRange = mediaList.size - 1
-                                        
-                                        if (scrollableRange > 0) {
-                                            // 실제 로드된 미디어 범위 기준으로 진행률 계산
-                                            (firstVisibleIndex.toFloat() / scrollableRange).coerceIn(0f, 1f)
-                                        } else {
-                                            0f
-                                        }
-                                    } else {
-                                        0f
-                                    }
-                                }
-                            }
-                            
-                            // 스크롤바 Thumb 크기 계산
-                            val baseThumbHeight = 60.dp
-                            
-                            // 전체 미디어 수를 기반으로 Thumb 크기 조정
-                            val thumbHeight = if (totalMediaCount > 0) {
-                                val ratio = mediaList.size.toFloat() / totalMediaCount
-                                (baseThumbHeight.value * ratio.coerceIn(0.2f, 1f)).dp.coerceAtMost(100.dp)
-                            } else {
-                                baseThumbHeight
-                            }
-                            
-                            // 실제 측정된 컨테이너 높이 기반으로 안전한 범위 계산
-                            val safeContainerHeight = containerHeightDp.coerceAtLeast(100f) // 최소 100dp 보장
-                            
-                            // 절대적으로 안전한 스크롤 범위 (컨테이너의 90%만 사용하여 확실한 안전 마진)
-                            val absoluteSafeRange = (safeContainerHeight * 0.95f - thumbHeight.value).coerceAtLeast(0f)
-                            
-                            // Thumb 위치 - 절대적으로 안전한 범위 내에서만 이동
-                            val thumbOffset = if (absoluteSafeRange > 0f && containerHeightPx > 0) {
-                                (scrollProgress * absoluteSafeRange).coerceIn(0f, absoluteSafeRange)
-                            } else {
-                                0f
-                            }
-                            
+                        // 스크롤바 Thumb
+                        if (showScrollbar || isScrollbarDragging) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .offset(y = thumbOffset.dp) // 실제 리스트 높이 기반으로 계산된 안전한 위치
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = 10.dp, top = 50.dp, bottom = 16.dp)
                                     .width(10.dp)
-                                    .height(thumbHeight)
-                                    .background(
-                                        Color.White.copy(alpha = 0.7f),
-                                        RoundedCornerShape(5.dp)
-                                    )
-                                    .pointerInput(Unit) {
-                                        detectDragGestures(
-                                            onDragStart = { 
-                                                isScrollbarDragging = true
-                                                showScrollbar = true
-                                                showDatePopup = true
-                                            },
-                                            onDragEnd = {
-                                                isScrollbarDragging = false
-                                                // 1.5초 후에 숨김
-                                                coroutineScope.launch {
-                                                    kotlinx.coroutines.delay(1500)
-                                                    showScrollbar = false
-                                                    showDatePopup = false
-                                                }
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                
-                                                // 드래그 위치에 따라 스크롤 위치 계산 - 실제 로드된 미디어 기준
-                                                val scrollableRange = mediaList.size - 1
-                                                
-                                                // 실제 측정된 컨테이너 크기 사용 (절대적으로 안전)
-                                                val safeContainerHeight = containerHeightDp.coerceAtLeast(100f)
-                                                val baseThumbHeight = 60f
-                                                
-                                                // 전체 미디어 수를 기반으로 Thumb 크기 조정
-                                                val thumbHeight = if (totalMediaCount > 0) {
-                                                    val ratio = mediaList.size.toFloat() / totalMediaCount
-                                                    (baseThumbHeight * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f)
-                                                } else {
-                                                    baseThumbHeight
-                                                }
-                                                
-                                                // 절대적으로 안전한 범위 (90% 사용)
-                                                val absoluteSafeRange = (safeContainerHeight * 0.95f - thumbHeight).coerceAtLeast(0f)
-                                                
-                                                // 드래그 계산 - 절대적으로 안전한 범위 내에서만
-                                                val currentOffset = scrollProgress * absoluteSafeRange
-                                                val newOffset = (currentOffset + dragAmount.y * 0.5f).coerceIn(0f, absoluteSafeRange)
-                                                val newScrollProgress = if (absoluteSafeRange > 0f) (newOffset / absoluteSafeRange).coerceIn(0f, 1f) else 0f
-                                                
-                                                coroutineScope.launch {
-                                                    if (scrollableRange > 0) {
-                                                        val targetIndex = (newScrollProgress * scrollableRange).toInt()
-                                                            .coerceIn(0, scrollableRange)
-                                                        // 실제 로드된 아이템 수를 초과하지 않도록 제한
-                                                        val safeTargetIndex = targetIndex.coerceIn(0, mediaList.size - 1)
-                                                        gridState.scrollToItem(safeTargetIndex)
-                                                    }
-                                                }
-                                            }
+                                    .fillMaxHeight()
+                                    .onGloballyPositioned { coordinates ->
+                                        containerHeightPx = coordinates.size.height.toFloat()
+                                    }
+                            ) {
+                                // 미디어 수 정보 표시
+                                if ((showDatePopup || isScrollbarDragging) && totalMediaCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .offset(x = (-80).dp)
+                                            .wrapContentSize()
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.Black.copy(alpha = 0.8f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "${mediaList.size}/${totalMediaCount}",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
-                            )
+                                }
+                                
+                                // Thumb
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .offset(y = thumbOffset)
+                                        .width(10.dp)
+                                        .height(with(density) { thumbHeightPx.toDp() })
+                                        .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(5.dp))
+                                        .pointerInput(Unit) {
+                                            detectDragGestures(
+                                                onDragStart = {
+                                                    isScrollbarDragging = true
+                                                    showScrollbar = true
+                                                    showDatePopup = true
+                                                },
+                                                onDragEnd = {
+                                                    isScrollbarDragging = false
+                                                    coroutineScope.launch {
+                                                        kotlinx.coroutines.delay(1500)
+                                                        showScrollbar = false
+                                                        showDatePopup = false
+                                                    }
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    
+                                                    val scrollableRange = mediaList.size - 1
+                                                    val newOffsetPx = (thumbOffsetPx + dragAmount.y * 0.5f)
+                                                        .coerceIn(0f, absoluteSafeRangePx)
+                                                    val newProgress = if (absoluteSafeRangePx > 0f)
+                                                        (newOffsetPx / absoluteSafeRangePx).coerceIn(0f, 1f)
+                                                    else 0f
+                                                    
+                                                    coroutineScope.launch {
+                                                        if (scrollableRange > 0) {
+                                                            val targetIndex = (newProgress * scrollableRange.toFloat()).toInt()
+                                                                .coerceIn(0, scrollableRange)
+                                                            gridState.scrollToItem(targetIndex)
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                )
+                            }
                         }
                         
-                        // 날짜 표시 (스크롤 중이거나 드래그 중일 때 표시) - thumb 위치에 맞춰서 배치
-//                        if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
-//                            // thumb 위치 계산 (위에서 계산한 것과 동일한 로직)
-//                            val layoutInfo = gridState.layoutInfo
-//                            val visibleItems = layoutInfo.visibleItemsInfo
-//                            val scrollProgress = if (visibleItems.isNotEmpty() && mediaList.isNotEmpty()) {
-//                                val firstVisibleIndex = visibleItems.first().index
-//                                val scrollableRange = mediaList.size - 1
-//                                if (scrollableRange > 0) {
-//                                    (firstVisibleIndex.toFloat() / scrollableRange).coerceIn(0f, 1f)
-//                                } else {
-//                                    0f
-//                                }
-//                            } else {
-//                                0f
-//                            }
-//
-//                            // 컨테이너 높이와 thumb 높이 계산
-//                            val containerHeightDp = with(density) { containerHeightPx.toDp().value }
-//                            val safeContainerHeight = containerHeightDp.coerceAtLeast(100f)
-//                            val baseThumbHeight = 60f
-//                            val thumbHeight = if (totalMediaCount > 0) {
-//                                val ratio = mediaList.size.toFloat() / totalMediaCount
-//                                (baseThumbHeight * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f)
-//                            } else {
-//                                baseThumbHeight
-//                            }
-//
-//                            // thumb의 Y축 위치 계산
-//                            val absoluteSafeRange = (safeContainerHeight * 1f - thumbHeight).coerceAtLeast(0f)
-//                            val thumbYPosition = if (absoluteSafeRange > 0f && containerHeightPx > 0) {
-//                                (scrollProgress * absoluteSafeRange).coerceIn(0f, absoluteSafeRange)
-//                            } else {
-//                                0f
-//                            }
-//
-//                            // thumb 중앙에 맞춰서 날짜 팝업 위치 조정
-//                            val datePopupYOffset = thumbYPosition + (thumbHeight / 2f) - 12f // 팝업 높이의 절반만큼 위로 조정
-//
-//                            Box(
-//                                modifier = Modifier
-//                                    .align(Alignment.TopEnd)
-//                                    .offset(x = (-30).dp, y = datePopupYOffset.dp)
-//                                    .wrapContentSize()
-//                                    .clip(RoundedCornerShape(8.dp))
-//                                    .background(Color.Black.copy(alpha = 0.85f))
-//                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-//                            ) {
-//                                Text(
-//                                    text = currentDate,
-//                                    color = Color.White,
-//                                    fontSize = 14.sp,
-//                                    fontWeight = FontWeight.Medium
-//                                )
-//                            }
-//                        }
+                        // 날짜 팝업 표시
+                        if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = (-30).dp, y = thumbOffset + (with(density) { thumbHeightPx.toDp() } / 2) - 12.dp)
+                                    .wrapContentSize()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.85f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = currentDate,
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
