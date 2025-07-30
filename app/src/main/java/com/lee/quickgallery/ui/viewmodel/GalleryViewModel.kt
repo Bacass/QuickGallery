@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import timber.log.Timber
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
@@ -35,6 +37,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     
     private val _hasPermission = MutableStateFlow(false)
     val hasPermission: StateFlow<Boolean> = _hasPermission.asStateFlow()
+    
+    private val _totalMediaCount = MutableStateFlow(0)
+    val totalMediaCount: StateFlow<Int> = _totalMediaCount.asStateFlow()
     
     init {
         checkPermission()
@@ -166,10 +171,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                val media = mediaStoreUtil.getMediaByFolder(folderPath)
-                _mediaList.value = media
+                // 폴더별 전체 미디어 수와 실제 미디어를 병렬로 조회
+                val (media, totalCount) = coroutineScope {
+                    val mediaDeferred = async { mediaStoreUtil.getMediaByFolder(folderPath) }
+                    val totalCountDeferred = async { mediaStoreUtil.getMediaCountByFolder(folderPath) }
+                    
+                    mediaDeferred.await() to totalCountDeferred.await()
+                }
                 
-                Timber.tag(TAG).d("폴더별 미디어 로딩 완료: ${media.size}개")
+                _mediaList.value = media
+                _totalMediaCount.value = totalCount
+                
+                Timber.tag(TAG).d("폴더별 미디어 로딩 완료: ${media.size}개 (전체: ${totalCount}개)")
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "폴더별 미디어 로딩 중 오류 발생")

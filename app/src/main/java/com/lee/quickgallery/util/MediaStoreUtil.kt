@@ -408,6 +408,87 @@ class MediaStoreUtil(private val context: Context) {
     }
     
     /**
+     * 특정 폴더의 전체 미디어 수를 조회합니다.
+     */
+    suspend fun getMediaCountByFolder(folderPath: String): Int = withContext(Dispatchers.IO) {
+        var totalCount = 0
+        
+        try {
+            Timber.tag(TAG).d("폴더별 미디어 수 조회 시작: $folderPath")
+            
+            // 폴더 경로 정규화 (끝에 슬래시가 있으면 제거)
+            val normalizedFolderPath = folderPath.trimEnd('/')
+            
+            // 이미지 수 조회
+            val imageCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+            
+            val imageSelection = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?)"
+            } else {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'image/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} = ?)"
+            }
+            val imageSelectionArgs = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                arrayOf("%Camera%", "%DCIM/Camera%", "%Pictures/Camera%")
+            } else {
+                arrayOf(normalizedFolderPath, "$normalizedFolderPath/")
+            }
+            
+            context.contentResolver.query(
+                imageCollection,
+                arrayOf("COUNT(*)"),
+                imageSelection,
+                imageSelectionArgs,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    totalCount += cursor.getInt(0)
+                }
+            }
+            
+            // 비디오 수 조회
+            val videoCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
+            
+            val videoSelection = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'video/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?)"
+            } else {
+                "${MediaStore.MediaColumns.MIME_TYPE} LIKE 'video/%' AND (${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} = ?)"
+            }
+            val videoSelectionArgs = if (normalizedFolderPath.contains("Camera", ignoreCase = true)) {
+                arrayOf("%Camera%", "%DCIM/Camera%", "%Pictures/Camera%")
+            } else {
+                arrayOf(normalizedFolderPath, "$normalizedFolderPath/")
+            }
+            
+            context.contentResolver.query(
+                videoCollection,
+                arrayOf("COUNT(*)"),
+                videoSelection,
+                videoSelectionArgs,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    totalCount += cursor.getInt(0)
+                }
+            }
+            
+            Timber.tag(TAG).d("폴더별 미디어 수 조회 완료: $folderPath - ${totalCount}개")
+            
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "폴더별 미디어 수 조회 중 오류 발생")
+        }
+        
+        totalCount
+    }
+    
+    /**
      * 폴더별로 그룹화된 미디어를 조회합니다.
      */
     suspend fun getMediaGroupedByFolder(): Map<String, List<MediaItem>> = withContext(Dispatchers.IO) {
