@@ -403,7 +403,7 @@ class MediaStoreUtil(private val context: Context) {
             
             context.contentResolver.query(
                 collection,
-                arrayOf("COUNT(*)"),
+                arrayOf("COUNT(1)"),
                 selection,
                 null,
                 null
