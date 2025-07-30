@@ -1,24 +1,26 @@
 package com.lee.quickgallery.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -32,33 +34,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.components.MediaThumbnail
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
@@ -82,6 +77,7 @@ fun SubListScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val hasPermission by viewModel.hasPermission.collectAsState()
     val totalMediaCount by viewModel.totalMediaCount.collectAsState()
+    val context = LocalContext.current
     
     // 현재 정렬 방식을 State로 관리
     var currentSortType by remember { mutableStateOf(SortType.fromString(AppPrefs.mediaSortType)) }
@@ -108,6 +104,27 @@ fun SubListScreen(
                 viewModel.loadMediaByFolder(folderPath, forceRefresh = true)
             }
             kotlinx.coroutines.delay(100) // 100ms마다 체크
+        }
+    }
+    
+    // 미디어 클릭 처리 함수
+    val handleMediaClick = { mediaItem: com.lee.quickgallery.util.MediaItem ->
+        if (mediaItem.mimeType.startsWith("video/")) {
+            // 비디오 파일인 경우 외부 영상 플레이어 앱으로 연결
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(mediaItem.uri, mediaItem.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                // 영상 플레이어 앱이 없는 경우 기본 앱 선택 다이얼로그 표시
+                val chooserIntent = Intent.createChooser(intent, "영상 재생")
+                context.startActivity(chooserIntent)
+            }
+        } else {
+            // 이미지 파일인 경우 ViewerScreen으로 이동
+            onMediaClick(mediaItem.uri.toString())
         }
     }
     
@@ -338,7 +355,7 @@ fun SubListScreen(
                             ) { mediaItem ->
                                 MediaThumbnail(
                                     mediaItem = mediaItem,
-                                    onClick = { onMediaClick(mediaItem.uri.toString()) }
+                                    onClick = { handleMediaClick(mediaItem) }
                                 )
                             }
                         }
