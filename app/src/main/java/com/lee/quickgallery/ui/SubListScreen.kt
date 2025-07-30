@@ -229,7 +229,8 @@ fun SubListScreen(
                     
                     // 터치 드래그 전용 상태 추가
                     var isTouchDragging by remember { mutableStateOf(false) }
-                    var currentDragOffset by remember { mutableStateOf(0f) }
+                    var dragStartY by remember { mutableStateOf(0f) }
+                    var dragCurrentY by remember { mutableStateOf(0f) }
                     
                     // 스크롤 진행도 계산 (example.kt 방식)
                     val scrollProgress by remember {
@@ -418,17 +419,40 @@ fun SubListScreen(
                                         .pointerInput(Unit, mediaList.size) {
                                             detectDragGestures(
                                                 onDragStart = { offset ->
-                                                    println("DEBUG: Drag started at offset: $offset")
+                                                    // 현재 스크롤 위치를 기반으로 실제 thumb 위치 계산
+                                                    val layoutInfo = gridState.layoutInfo
+                                                    val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
+                                                    val currentScrollProgress = if (visibleItem != null && mediaList.isNotEmpty()) {
+                                                        val totalItems = mediaList.size
+                                                        val lastIndex = totalItems - layoutInfo.visibleItemsInfo.size
+                                                        if (lastIndex > 0) {
+                                                            (visibleItem.index.toFloat() / lastIndex).coerceIn(0f, 1f)
+                                                        } else {
+                                                            0f
+                                                        }
+                                                    } else {
+                                                        0f
+                                                    }
+                                                    
+                                                    val safeRange = (containerHeightPx - thumbHeightPx).coerceAtLeast(0f)
+                                                    val actualThumbPosition = currentScrollProgress * safeRange
+                                                    
+                                                    println("DEBUG: Drag started at offset: $offset, actualThumbPosition: $actualThumbPosition, scrollProgress: $currentScrollProgress")
                                                     isScrollbarDragging = true
                                                     isTouchDragging = true
                                                     showScrollbar = true
                                                     showDatePopup = true
-                                                    currentDragOffset = offset.y
+                                                    // 실제 thumb 위치를 시작점으로 설정
+                                                    dragStartY = actualThumbPosition
+                                                    dragCurrentY = actualThumbPosition
                                                 },
                                                 onDragEnd = {
                                                     println("DEBUG: Drag ended")
                                                     isScrollbarDragging = false
                                                     isTouchDragging = false
+                                                    // 드래그 상태 리셋
+                                                    dragStartY = 0f
+                                                    dragCurrentY = 0f
                                                     coroutineScope.launch {
                                                         kotlinx.coroutines.delay(1500)
                                                         showScrollbar = false
@@ -437,14 +461,18 @@ fun SubListScreen(
                                                 },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
-                                                    currentDragOffset += dragAmount.y
+                                                    // 드래그 델타를 누적하여 새로운 thumb 위치 계산
+                                                    dragCurrentY += dragAmount.y
                                                     
                                                     if (mediaList.isNotEmpty() && containerHeightPx > 0f) {
-                                                        val progress = (currentDragOffset / containerHeightPx).coerceIn(0f, 1f)
+                                                        val safeRange = (containerHeightPx - thumbHeightPx).coerceAtLeast(0f)
+                                                        // dragCurrentY가 이미 실제 thumb 위치
+                                                        val clampedPosition = dragCurrentY.coerceIn(0f, safeRange)
+                                                        val progress = if (safeRange > 0f) (clampedPosition / safeRange) else 0f
                                                         val targetIndex = (progress * (mediaList.size - 1).coerceAtLeast(0)).toInt()
                                                             .coerceIn(0, mediaList.size - 1)
                                                         
-                                                        println("DEBUG: Drag offset: $currentDragOffset, progress: $progress, targetIndex: $targetIndex")
+                                                        println("DEBUG: dragAmount: $dragAmount, dragCurrentY: $dragCurrentY, progress: $progress, targetIndex: $targetIndex")
                                                         
                                                         coroutineScope.launch {
                                                             gridState.scrollToItem(targetIndex)
