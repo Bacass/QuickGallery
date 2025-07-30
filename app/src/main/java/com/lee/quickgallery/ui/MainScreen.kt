@@ -14,11 +14,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -41,10 +45,12 @@ import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
 import com.lee.quickgallery.util.AppPrefs
 import com.lee.quickgallery.util.SortType
 import com.lee.quickgallery.model.FolderItem
+import com.lee.quickgallery.util.VibrationUtil
 import org.burnoutcrew.reorderable.ReorderableItem
 import org.burnoutcrew.reorderable.detectReorderAfterLongPress
 import org.burnoutcrew.reorderable.rememberReorderableLazyGridState
 import org.burnoutcrew.reorderable.reorderable
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,12 +116,15 @@ fun MainScreen(
             )
         }
     ) { paddingValues ->
+        // 드래그 모드 상태 관리
+        var isDragging by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.surface)
         ) {
+            // 드래그 모드일 때 각 폴더에 개별적으로 드래그 아이콘이 표시됩니다
             when {
                 !hasPermission -> {
                     // 권한 없음 상태
@@ -181,6 +190,7 @@ fun MainScreen(
                 else -> {
                     // 폴더 그리드 (드래그 앤 드롭 지원)
                     var orderedFolderList by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
+                    val context = LocalContext.current
                     
                     LaunchedEffect(folderList) {
                         if (folderList.isNotEmpty()) {
@@ -199,6 +209,9 @@ fun MainScreen(
                         }
                     )
                     
+                    // 드래그 상태는 ReorderableItem의 isDragging 파라미터를 통해 감지
+                    // 진동은 detectReorderAfterLongPress에서 처리
+                    
                     LazyVerticalGrid(
                         state = reorderableState.gridState,
                         columns = GridCells.Fixed(2),
@@ -214,10 +227,21 @@ fun MainScreen(
                             ReorderableItem(
                                 reorderableState = reorderableState,
                                 key = folderItem.folderPath
-                            ) { isDragging ->
+                            ) { isDraggingItem ->
+                                // 드래그 시작 시 진동 및 상위 상태 업데이트
+                                LaunchedEffect(isDraggingItem) {
+                                    if (isDraggingItem && !isDragging) {
+                                        isDragging = true
+                                        VibrationUtil.vibrateForDragMode(context)
+                                    } else if (!isDraggingItem && isDragging) {
+                                        isDragging = false
+                                    }
+                                }
+                                
                                 FolderThumbnail(
                                     folderItem = folderItem,
                                     onClick = { onFolderClick(folderItem.folderPath) },
+                                    isDragging = isDragging,
                                     modifier = Modifier.detectReorderAfterLongPress(reorderableState)
                                 )
                             }

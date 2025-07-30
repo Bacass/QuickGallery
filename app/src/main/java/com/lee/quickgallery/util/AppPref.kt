@@ -14,6 +14,9 @@ object AppPrefs : KotprefModel() {
     // 표시 설정
     var showMediaCount: Boolean by booleanPref(true)
     var mediaSortType: String by stringPref(SortType.TIME_DESC.name)
+    
+    // 폴더 순서 저장
+    var folderOrder: String by stringPref("")
 
     // 버전 정보
     var appVersion: String by stringPref("1.0.0")

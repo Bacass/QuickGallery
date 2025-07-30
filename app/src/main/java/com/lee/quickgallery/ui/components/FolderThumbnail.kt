@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.res.painterResource
+import com.lee.quickgallery.R
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,10 +39,12 @@ import com.lee.quickgallery.model.FolderItem
 import com.lee.quickgallery.util.MediaStoreUtil
 import com.lee.quickgallery.util.AppPrefs
 
+
 @Composable
 fun FolderThumbnail(
     folderItem: FolderItem,
     onClick: () -> Unit,
+    isDragging: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -107,6 +113,23 @@ fun FolderThumbnail(
                         }
                     }
                 )
+                
+                // 드래그 모드일 때 우상단에 드래그 아이콘 표시
+                if (isDragging) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .padding(8.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_drag_indicator),
+                            contentDescription = "드래그 가능",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
                 
                 // 하단 반투명 오버레이
                 Box(

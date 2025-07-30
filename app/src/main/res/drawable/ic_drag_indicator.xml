@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    
+    <!-- 검정색 반투명 원형 배경 -->
+    <path
+        android:fillColor="#80000000"
+        android:pathData="M12,12m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" />
+    
+    <!-- 하얀색 첫 번째 선 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,9h8v1.5h-8z" />
+    
+    <!-- 하얀색 두 번째 선 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,13.5h8v1.5h-8z" />
+        
+</vector> 

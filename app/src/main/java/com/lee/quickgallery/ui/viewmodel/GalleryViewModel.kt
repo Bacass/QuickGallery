@@ -120,6 +120,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 
                 _folderList.value = folderItems
                 
+                // 폴더 순서 초기화 (저장된 순서 복원 또는 기본 순서)
+                initializeFolderOrder()
+                
                 Timber.tag(TAG).d("폴더 로딩 완료: ${folderItems.size}개, 정렬: ${sortType.displayName}")
                 
             } catch (e: Exception) {
@@ -248,6 +251,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val item = currentOrder.removeAt(fromIndex)
             currentOrder.add(toIndex, item)
             _folderOrder.value = currentOrder
+            saveFolderOrder(currentOrder)
             Timber.tag(TAG).d("폴더 순서 변경: $fromIndex -> $toIndex")
         }
     }
@@ -255,10 +259,41 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     // 폴더 순서 초기화
     fun initializeFolderOrder() {
         val currentFolders = _folderList.value
-        if (currentFolders.isNotEmpty() && _folderOrder.value.isEmpty()) {
-            val order = currentFolders.map { it.folderPath }
-            _folderOrder.value = order
-            Timber.tag(TAG).d("폴더 순서 초기화: ${order.size}개")
+        if (currentFolders.isNotEmpty()) {
+            // 저장된 순서가 있으면 복원, 없으면 기본 순서 사용
+            val savedOrder = loadFolderOrder()
+            val currentFolderPaths = currentFolders.map { it.folderPath }
+            
+            if (savedOrder.isNotEmpty()) {
+                // 저장된 순서에서 현재 존재하는 폴더만 필터링
+                val validOrder = savedOrder.filter { it in currentFolderPaths }
+                // 새로 추가된 폴더들을 뒤에 추가
+                val newFolders = currentFolderPaths.filter { it !in validOrder }
+                val finalOrder = validOrder + newFolders
+                _folderOrder.value = finalOrder
+                Timber.tag(TAG).d("저장된 폴더 순서 복원: ${finalOrder.size}개")
+            } else {
+                // 저장된 순서가 없으면 기본 순서 사용
+                _folderOrder.value = currentFolderPaths
+                Timber.tag(TAG).d("기본 폴더 순서 초기화: ${currentFolderPaths.size}개")
+            }
+        }
+    }
+    
+    // 폴더 순서 저장
+    private fun saveFolderOrder(folderOrder: List<String>) {
+        val orderString = folderOrder.joinToString(",")
+        AppPrefs.folderOrder = orderString
+        Timber.tag(TAG).d("폴더 순서 저장: ${folderOrder.size}개")
+    }
+    
+    // 폴더 순서 복원
+    private fun loadFolderOrder(): List<String> {
+        val orderString = AppPrefs.folderOrder
+        return if (orderString.isNotEmpty()) {
+            orderString.split(",").filter { it.isNotEmpty() }
+        } else {
+            emptyList()
         }
     }
     
