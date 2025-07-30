@@ -400,7 +400,7 @@ fun SubListScreen(
                                     .align(Alignment.TopEnd)
                                     .offset(
                                         x = (-30).dp,
-                                        y = thumbOffset + with(density) { (thumbHeightPx / 2).toDp() } - 20.dp // 중앙 정렬 + 미세 조정
+                                        y = thumbOffset + with(density) { (thumbHeightPx / 2).toDp() } - 10.dp // 중앙 정렬 + 미세 조정
                                     )
                                     .wrapContentSize()
                                     .clip(RoundedCornerShape(8.dp))
