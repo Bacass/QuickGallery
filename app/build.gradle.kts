@@ -66,4 +66,7 @@ dependencies {
     
     // coil for image loading
     implementation(libs.coil.compose)
+    
+    // foundation for pager
+    implementation("androidx.compose.foundation:foundation")
 }

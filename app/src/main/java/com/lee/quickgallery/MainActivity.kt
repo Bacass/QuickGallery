@@ -17,6 +17,7 @@ import com.lee.quickgallery.ui.PermissionScreen
 import com.lee.quickgallery.ui.SettingScreen
 import com.lee.quickgallery.ui.SplashScreen
 import com.lee.quickgallery.ui.SubListScreen
+import com.lee.quickgallery.ui.ViewerScreen
 import com.lee.quickgallery.ui.theme.QuickGalleryTheme
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
 
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
 fun QuickGalleryApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var selectedFolderPath by remember { mutableStateOf<String?>(null) }
+    var selectedMediaUri by remember { mutableStateOf<String?>(null) }
     
     // 공유 ViewModel 인스턴스
     val sharedViewModel: GalleryViewModel = viewModel()
@@ -78,7 +80,8 @@ fun QuickGalleryApp() {
                         currentScreen = Screen.Main
                     },
                     onMediaClick = { mediaUri ->
-                        // 미디어 클릭 시 처리 (예: 상세 보기, 공유 등)
+                        selectedMediaUri = mediaUri
+                        currentScreen = Screen.Viewer
                     },
                     viewModel = sharedViewModel
                 )
@@ -92,6 +95,20 @@ fun QuickGalleryApp() {
                 viewModel = sharedViewModel
             )
         }
+        Screen.Viewer -> {
+            selectedMediaUri?.let { mediaUri ->
+                selectedFolderPath?.let { folderPath ->
+                    ViewerScreen(
+                        initialMediaUri = mediaUri,
+                        folderPath = folderPath,
+                        onBackClick = {
+                            currentScreen = Screen.SubList
+                        },
+                        viewModel = sharedViewModel
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -101,4 +118,5 @@ sealed class Screen {
     object Main : Screen()
     object SubList : Screen()
     object Settings : Screen()
+    object Viewer : Screen()
 }
