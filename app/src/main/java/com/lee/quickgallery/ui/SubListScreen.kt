@@ -238,6 +238,16 @@ fun SubListScreen(
                     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd", Locale.getDefault()) }
                     val density = LocalDensity.current
                     
+                    // 미디어 리스트가 있을 때만 스크롤바 관련 처리
+                    val shouldShowScrollbar = remember(mediaList.size) {
+                        mediaList.size > 6 // 6개 이상일 때 스크롤바 표시
+                    }
+                    
+                    // 실제로 스크롤이 가능한지 확인
+                    val canScroll = remember(mediaList.size) {
+                        mediaList.size > 9 // 3열 그리드에서 3행 이상일 때 스크롤 가능
+                    }
+                    
                     // 스크롤바 표시 상태
                     var showScrollbar by remember { mutableStateOf(false) }
                     var isScrollbarDragging by remember { mutableStateOf(false) }
@@ -287,34 +297,20 @@ fun SubListScreen(
                     LaunchedEffect(gridState) {
                         snapshotFlow { gridState.isScrollInProgress }
                             .collect { isScrolling ->
-                                if (isScrolling && !isTouchDragging) {
-                                    // 일반 스크롤 시에는 스크롤바만 표시
-                                    showScrollbar = true
-                                } else if (!isScrolling && !isTouchDragging) {
-                                    // 스크롤이 멈추고 터치 드래그가 아닐 때만 자동 숨김
-                                    kotlinx.coroutines.delay(2000)
-                                    if (!isScrollbarDragging && !isTouchDragging) {
-                                        showScrollbar = false
-                                        showDatePopup = false
+                                if (canScroll) { // 스크롤 가능한 경우에만 처리
+                                    if (isScrolling && !isTouchDragging) {
+                                        // 스크롤 시작 시 thumb 표시
+                                        showScrollbar = true
+                                    } else if (!isScrolling && !isTouchDragging) {
+                                        // 스크롤이 멈추고 터치 드래그가 아닐 때 1.5초 후 숨김
+                                        kotlinx.coroutines.delay(1500)
+                                        if (!isScrollbarDragging && !isTouchDragging) {
+                                            showScrollbar = false
+                                            showDatePopup = false
+                                        }
                                     }
                                 }
                             }
-                    }
-                    
-                    // 미디어 리스트가 있을 때만 스크롤바 관련 처리
-                    val shouldShowScrollbar = remember(mediaList.size) {
-                        mediaList.size > 6 // 6개 이상일 때 스크롤바 표시
-                    }
-                    
-                    // 초기 로드 시 스크롤바 표시
-                    LaunchedEffect(mediaList.size) {
-                        if (mediaList.isNotEmpty() && shouldShowScrollbar) {
-                            showScrollbar = true
-                            kotlinx.coroutines.delay(3000) // 3초 표시
-                            if (!isScrollbarDragging && !isTouchDragging) {
-                                showScrollbar = false
-                            }
-                        }
                     }
                     
                     // Thumb 높이 계산
@@ -340,6 +336,8 @@ fun SubListScreen(
                     val thumbOffsetPx = (scrollProgress * absoluteSafeRangePx).coerceIn(0f, absoluteSafeRangePx)
                     val thumbOffset = with(density) { thumbOffsetPx.toDp() }
                     
+                    // 초기 로드 시에는 스크롤바를 표시하지 않음 (스크롤 시작 시에만 표시)
+                    
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
@@ -360,8 +358,8 @@ fun SubListScreen(
                             }
                         }
                         
-                        // 스크롤바 Thumb (디버깅용 - 항상 표시)
-                        if (mediaList.isNotEmpty()) {
+                        // 스크롤바 Thumb (스크롤 가능하고 표시 상태일 때만 표시)
+                        if (mediaList.isNotEmpty() && canScroll && showScrollbar) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
@@ -377,17 +375,7 @@ fun SubListScreen(
                                         detectTapGestures { /* 터치 이벤트 소비 */ }
                                     }
                             ) {
-                                // 스크롤바 트랙 (배경)
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .width(6.dp)
-                                        .fillMaxHeight()
-                                        .background(
-                                            Color.Black.copy(alpha = 0.4f), 
-                                            RoundedCornerShape(3.dp)
-                                        )
-                                )
+                                // 스크롤바 트랙 (배경) - 제거됨
                                 // 미디어 수 정보 표시 (터치 드래그일 때만)
                                 if (isTouchDragging && totalMediaCount > 0) {
                                     Box(

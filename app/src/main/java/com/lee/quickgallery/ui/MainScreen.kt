@@ -73,6 +73,13 @@ fun MainScreen(
         onDispose { }
     }
     
+    // 자동 새로고침 처리
+    LaunchedEffect(Unit) {
+        if (AppPrefs.autoRefresh) {
+            viewModel.refreshMedia()
+        }
+    }
+    
     // 폴더 목록이 변경될 때마다 순서 초기화
     LaunchedEffect(folderList) {
         if (folderList.isNotEmpty()) {

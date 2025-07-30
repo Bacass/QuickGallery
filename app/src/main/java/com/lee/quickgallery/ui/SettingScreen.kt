@@ -58,7 +58,7 @@ fun SettingScreen(
     val context = LocalContext.current
     var showMediaCount by remember { mutableStateOf(AppPrefs.showMediaCount) }
     var selectedSortType by remember { mutableStateOf(SortType.fromString(AppPrefs.mediaSortType)) }
-    var autoRefresh by remember { mutableStateOf(false) }
+    var autoRefresh by remember { mutableStateOf(AppPrefs.autoRefresh) }
     
     // Back key 처리
     BackHandler {
@@ -384,7 +384,10 @@ fun SettingScreen(
                         
                         Switch(
                             checked = autoRefresh,
-                            onCheckedChange = { autoRefresh = it }
+                            onCheckedChange = { 
+                                autoRefresh = it
+                                AppPrefs.autoRefresh = it
+                            }
                         )
                     }
                 }
