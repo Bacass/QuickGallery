@@ -233,11 +233,10 @@ fun SubListScreen(
                             val layoutInfo = gridState.layoutInfo
                             val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
                             if (visibleItem != null && mediaList.isNotEmpty()) {
-                                val scrollableRange = mediaList.size - 1
-                                if (scrollableRange > 0 && layoutInfo.viewportEndOffset > 0) {
-                                    val indexRatio = visibleItem.index.toFloat() / scrollableRange
-                                    val offsetRatio = visibleItem.offset.y.toFloat() / layoutInfo.viewportEndOffset.toFloat()
-                                    (indexRatio + offsetRatio).coerceIn(0f, 1f)
+                                val totalItems = mediaList.size
+                                val lastIndex = totalItems - layoutInfo.visibleItemsInfo.size
+                                if (lastIndex > 0) {
+                                    (visibleItem.index.toFloat() / lastIndex).coerceIn(0f, 1f)
                                 } else {
                                     0f
                                 }
@@ -291,7 +290,7 @@ fun SubListScreen(
                     }
                     
                     // Thumb 위치 계산
-                    val absoluteSafeRangePx = (containerHeightPx * 0.95f - thumbHeightPx).coerceAtLeast(0f)
+                    val absoluteSafeRangePx = (containerHeightPx - thumbHeightPx).coerceAtLeast(0f)
                     val thumbOffsetPx = (scrollProgress * absoluteSafeRangePx).coerceIn(0f, absoluteSafeRangePx)
                     val thumbOffset = with(density) { thumbOffsetPx.toDp() }
                     
@@ -320,7 +319,7 @@ fun SubListScreen(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(end = 10.dp, top = 50.dp, bottom = 16.dp)
+                                    .padding(end = 10.dp, top = 10.dp, bottom = 16.dp)
                                     .width(10.dp)
                                     .fillMaxHeight()
                                     .onGloballyPositioned { coordinates ->
@@ -393,13 +392,16 @@ fun SubListScreen(
                                 )
                             }
                         }
-                        
+
                         // 날짜 팝업 표시
                         if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .offset(x = (-30).dp, y = thumbOffset + (with(density) { thumbHeightPx.toDp() } / 2) - 12.dp)
+                                    .offset(
+                                        x = (-30).dp,
+                                        y = thumbOffset + with(density) { (thumbHeightPx / 2).toDp() } - 20.dp // 중앙 정렬 + 미세 조정
+                                    )
                                     .wrapContentSize()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color.Black.copy(alpha = 0.85f))
