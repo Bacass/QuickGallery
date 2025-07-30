@@ -69,4 +69,7 @@ dependencies {
     
     // foundation for pager
     implementation("androidx.compose.foundation:foundation")
+    
+    // reorderable for drag and drop
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 }

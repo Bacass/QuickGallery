@@ -40,6 +40,11 @@ import com.lee.quickgallery.ui.components.FolderThumbnail
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
 import com.lee.quickgallery.util.AppPrefs
 import com.lee.quickgallery.util.SortType
+import com.lee.quickgallery.model.FolderItem
+import org.burnoutcrew.reorderable.ReorderableItem
+import org.burnoutcrew.reorderable.detectReorderAfterLongPress
+import org.burnoutcrew.reorderable.rememberReorderableLazyGridState
+import org.burnoutcrew.reorderable.reorderable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +65,13 @@ fun MainScreen(
         viewModel.syncSortType()
         
         onDispose { }
+    }
+    
+    // 폴더 목록이 변경될 때마다 순서 초기화
+    LaunchedEffect(folderList) {
+        if (folderList.isNotEmpty()) {
+            viewModel.initializeFolderOrder()
+        }
     }
     
     Scaffold(
@@ -167,21 +179,48 @@ fun MainScreen(
                 }
                 
                 else -> {
-                    // 폴더 그리드
+                    // 폴더 그리드 (드래그 앤 드롭 지원)
+                    var orderedFolderList by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
+                    
+                    LaunchedEffect(folderList) {
+                        if (folderList.isNotEmpty()) {
+                            viewModel.initializeFolderOrder()
+                            orderedFolderList = viewModel.getOrderedFolderList()
+                        } else {
+                            orderedFolderList = emptyList()
+                        }
+                    }
+                    
+                    val reorderableState = rememberReorderableLazyGridState(
+                        onMove = { from, to ->
+                            viewModel.reorderFolders(from.index, to.index)
+                            // 순서 변경 후 목록 업데이트
+                            orderedFolderList = viewModel.getOrderedFolderList()
+                        }
+                    )
+                    
                     LazyVerticalGrid(
+                        state = reorderableState.gridState,
                         columns = GridCells.Fixed(2),
                         contentPadding = PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.reorderable(reorderableState)
                     ) {
                         items(
-                            items = folderList,
+                            items = orderedFolderList,
                             key = { it.folderPath }
                         ) { folderItem ->
-                            FolderThumbnail(
-                                folderItem = folderItem,
-                                onClick = { onFolderClick(folderItem.folderPath) }
-                            )
+                            ReorderableItem(
+                                reorderableState = reorderableState,
+                                key = folderItem.folderPath
+                            ) { isDragging ->
+                                FolderThumbnail(
+                                    folderItem = folderItem,
+                                    onClick = { onFolderClick(folderItem.folderPath) },
+                                    modifier = Modifier.detectReorderAfterLongPress(reorderableState)
+                                )
+                            }
                         }
                     }
                 }

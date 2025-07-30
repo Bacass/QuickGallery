@@ -46,6 +46,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _currentSortType = MutableStateFlow(SortType.fromString(AppPrefs.mediaSortType))
     val currentSortType: StateFlow<SortType> = _currentSortType.asStateFlow()
     
+    // 폴더 순서 관리를 위한 상태
+    private val _folderOrder = MutableStateFlow<List<String>>(emptyList())
+    val folderOrder: StateFlow<List<String>> = _folderOrder.asStateFlow()
+    
     init {
         checkPermission()
     }
@@ -234,6 +238,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (_currentSortType.value != currentPrefSortType) {
             _currentSortType.value = currentPrefSortType
             refreshFoldersWithNewSort()
+        }
+    }
+    
+    // 폴더 순서 변경
+    fun reorderFolders(fromIndex: Int, toIndex: Int) {
+        val currentOrder = _folderOrder.value.toMutableList()
+        if (fromIndex in currentOrder.indices && toIndex in currentOrder.indices) {
+            val item = currentOrder.removeAt(fromIndex)
+            currentOrder.add(toIndex, item)
+            _folderOrder.value = currentOrder
+            Timber.tag(TAG).d("폴더 순서 변경: $fromIndex -> $toIndex")
+        }
+    }
+    
+    // 폴더 순서 초기화
+    fun initializeFolderOrder() {
+        val currentFolders = _folderList.value
+        if (currentFolders.isNotEmpty() && _folderOrder.value.isEmpty()) {
+            val order = currentFolders.map { it.folderPath }
+            _folderOrder.value = order
+            Timber.tag(TAG).d("폴더 순서 초기화: ${order.size}개")
+        }
+    }
+    
+    // 현재 폴더 순서에 따라 정렬된 폴더 목록 반환
+    fun getOrderedFolderList(): List<FolderItem> {
+        val order = _folderOrder.value
+        val folders = _folderList.value.associateBy { it.folderPath }
+        
+        return order.mapNotNull { folderPath ->
+            folders[folderPath]
         }
     }
     
