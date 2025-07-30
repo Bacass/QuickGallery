@@ -227,6 +227,10 @@ fun SubListScreen(
                     var showDatePopup by remember { mutableStateOf(false) }
                     var containerHeightPx by remember { mutableStateOf(0f) }
                     
+                    // 터치 드래그 전용 상태 추가
+                    var isTouchDragging by remember { mutableStateOf(false) }
+                    var currentDragOffset by remember { mutableStateOf(0f) }
+                    
                     // 스크롤 진행도 계산 (example.kt 방식)
                     val scrollProgress by remember {
                         derivedStateOf {
@@ -265,25 +269,49 @@ fun SubListScreen(
                     LaunchedEffect(gridState) {
                         snapshotFlow { gridState.isScrollInProgress }
                             .collect { isScrolling ->
-                                if (isScrolling) {
-                                    showDatePopup = true
+                                if (isScrolling && !isTouchDragging) {
+                                    // 일반 스크롤 시에는 스크롤바만 표시
                                     showScrollbar = true
-                                } else {
-                                    kotlinx.coroutines.delay(1500)
-                                    if (!isScrollbarDragging) {
-                                        showDatePopup = false
+                                } else if (!isScrolling && !isTouchDragging) {
+                                    // 스크롤이 멈추고 터치 드래그가 아닐 때만 자동 숨김
+                                    kotlinx.coroutines.delay(2000)
+                                    if (!isScrollbarDragging && !isTouchDragging) {
                                         showScrollbar = false
+                                        showDatePopup = false
                                     }
                                 }
                             }
                     }
                     
+                    // 미디어 리스트가 있을 때만 스크롤바 관련 처리
+                    val shouldShowScrollbar = remember(mediaList.size) {
+                        mediaList.size > 6 // 6개 이상일 때 스크롤바 표시
+                    }
+                    
+                    // 초기 로드 시 스크롤바 표시
+                    LaunchedEffect(mediaList.size) {
+                        if (mediaList.isNotEmpty() && shouldShowScrollbar) {
+                            showScrollbar = true
+                            kotlinx.coroutines.delay(3000) // 3초 표시
+                            if (!isScrollbarDragging && !isTouchDragging) {
+                                showScrollbar = false
+                            }
+                        }
+                    }
+                    
                     // Thumb 높이 계산
-                    val baseThumbHeight = 60.dp
+                    val baseThumbHeight = 80.dp
+                    val minThumbHeight = 40.dp
+                    val maxThumbHeight = 120.dp
                     val thumbHeightPx = with(density) {
-                        if (totalMediaCount > 0) {
-                            val ratio = mediaList.size.toFloat() / totalMediaCount
-                            (baseThumbHeight.value * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f).dp.toPx()
+                        if (mediaList.size > 0) {
+                            val ratio = if (totalMediaCount > mediaList.size) {
+                                mediaList.size.toFloat() / totalMediaCount
+                            } else {
+                                0.6f // 기본 비율
+                            }
+                            (baseThumbHeight.value * ratio.coerceIn(0.3f, 1f))
+                                .coerceIn(minThumbHeight.value, maxThumbHeight.value).dp.toPx()
                         } else {
                             baseThumbHeight.toPx()
                         }
@@ -314,24 +342,40 @@ fun SubListScreen(
                             }
                         }
                         
-                        // 스크롤바 Thumb
-                        if (showScrollbar || isScrollbarDragging) {
+                        // 스크롤바 Thumb (디버깅용 - 항상 표시)
+                        if (mediaList.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(end = 10.dp, top = 10.dp, bottom = 16.dp)
-                                    .width(10.dp)
+                                    .padding(end = 10.dp, top = 10.dp, bottom = 10.dp)
+                                    .width(24.dp)
                                     .fillMaxHeight()
+//                                    .background(Color.Red.copy(alpha = 0.2f)) // 디버깅용 배경
                                     .onGloballyPositioned { coordinates ->
                                         containerHeightPx = coordinates.size.height.toFloat()
                                     }
+                                    .pointerInput(Unit) {
+                                        // 스크롤바 영역의 모든 터치 이벤트를 가로채서 리스트로 전파되지 않도록 함
+                                        detectTapGestures { /* 터치 이벤트 소비 */ }
+                                    }
                             ) {
-                                // 미디어 수 정보 표시
-                                if ((showDatePopup || isScrollbarDragging) && totalMediaCount > 0) {
+                                // 스크롤바 트랙 (배경)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(6.dp)
+                                        .fillMaxHeight()
+                                        .background(
+                                            Color.Black.copy(alpha = 0.4f), 
+                                            RoundedCornerShape(3.dp)
+                                        )
+                                )
+                                // 미디어 수 정보 표시 (터치 드래그일 때만)
+                                if (isTouchDragging && totalMediaCount > 0) {
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.CenterEnd)
-                                            .offset(x = (-80).dp)
+                                            .offset(x = (-50).dp)
                                             .wrapContentSize()
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(Color.Black.copy(alpha = 0.8f))
@@ -346,23 +390,45 @@ fun SubListScreen(
                                     }
                                 }
                                 
-                                // Thumb
+                                // Thumb (터치 영역과 표시 영역 통합)
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.TopStart)
+                                        .align(Alignment.TopEnd)
                                         .offset(y = thumbOffset)
-                                        .width(10.dp)
-                                        .height(with(density) { thumbHeightPx.toDp() })
-                                        .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(5.dp))
+                                        .width(28.dp) // 전체 터치 영역
+                                        .height(with(density) { thumbHeightPx.coerceAtLeast(50.dp.toPx()).toDp() })
+                                        // .background(Color.Green.copy(alpha = 0.3f)) // 디버깅용 - 터치 영역
                                         .pointerInput(Unit) {
+                                            detectTapGestures(
+                                                onTap = { offset ->
+                                                    // 탭한 위치로 즉시 스크롤
+                                                    if (mediaList.isNotEmpty() && containerHeightPx > 0f) {
+                                                        val progress = (offset.y / containerHeightPx).coerceIn(0f, 1f)
+                                                        val targetIndex = (progress * (mediaList.size - 1).coerceAtLeast(0)).toInt()
+                                                            .coerceIn(0, mediaList.size - 1)
+                                                        
+                                                        println("DEBUG: Tap at offset: $offset, progress: $progress, targetIndex: $targetIndex")
+                                                        coroutineScope.launch {
+                                                            gridState.animateScrollToItem(targetIndex)
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        .pointerInput(Unit, mediaList.size) {
                                             detectDragGestures(
-                                                onDragStart = {
+                                                onDragStart = { offset ->
+                                                    println("DEBUG: Drag started at offset: $offset")
                                                     isScrollbarDragging = true
+                                                    isTouchDragging = true
                                                     showScrollbar = true
                                                     showDatePopup = true
+                                                    currentDragOffset = offset.y
                                                 },
                                                 onDragEnd = {
+                                                    println("DEBUG: Drag ended")
                                                     isScrollbarDragging = false
+                                                    isTouchDragging = false
                                                     coroutineScope.launch {
                                                         kotlinx.coroutines.delay(1500)
                                                         showScrollbar = false
@@ -371,35 +437,45 @@ fun SubListScreen(
                                                 },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
+                                                    currentDragOffset += dragAmount.y
                                                     
-                                                    val scrollableRange = mediaList.size - 1
-                                                    val newOffsetPx = (thumbOffsetPx + dragAmount.y * 0.5f)
-                                                        .coerceIn(0f, absoluteSafeRangePx)
-                                                    val newProgress = if (absoluteSafeRangePx > 0f)
-                                                        (newOffsetPx / absoluteSafeRangePx).coerceIn(0f, 1f)
-                                                    else 0f
-                                                    
-                                                    coroutineScope.launch {
-                                                        if (scrollableRange > 0) {
-                                                            val targetIndex = (newProgress * scrollableRange.toFloat()).toInt()
-                                                                .coerceIn(0, scrollableRange)
+                                                    if (mediaList.isNotEmpty() && containerHeightPx > 0f) {
+                                                        val progress = (currentDragOffset / containerHeightPx).coerceIn(0f, 1f)
+                                                        val targetIndex = (progress * (mediaList.size - 1).coerceAtLeast(0)).toInt()
+                                                            .coerceIn(0, mediaList.size - 1)
+                                                        
+                                                        println("DEBUG: Drag offset: $currentDragOffset, progress: $progress, targetIndex: $targetIndex")
+                                                        
+                                                        coroutineScope.launch {
                                                             gridState.scrollToItem(targetIndex)
                                                         }
                                                     }
                                                 }
                                             )
                                         }
-                                )
+                                ) {
+                                    // 실제 보이는 Thumb (우측 정렬)
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .width(12.dp)
+                                            .fillMaxHeight()
+                                            .background(
+                                                Color.White.copy(alpha = if (isTouchDragging) 1.0f else 0.9f), 
+                                                RoundedCornerShape(6.dp)
+                                            )
+                                    )
+                                }
                             }
                         }
 
-                        // 날짜 팝업 표시
-                        if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
+                        // 날짜 팝업 표시 (터치 드래그일 때만)
+                        if (isTouchDragging && currentDate.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .offset(
-                                        x = (-30).dp,
+                                        x = (-50).dp,
                                         y = thumbOffset + with(density) { (thumbHeightPx / 2).toDp() } - 10.dp // 중앙 정렬 + 미세 조정
                                     )
                                     .wrapContentSize()
