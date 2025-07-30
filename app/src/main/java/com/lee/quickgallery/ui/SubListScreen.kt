@@ -3,14 +3,18 @@ package com.lee.quickgallery.ui
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,14 +27,26 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -64,6 +80,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// 액션 타입 enum
+enum class ActionType {
+    MOVE, COPY, SHARE, DELETE
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubListScreen(
@@ -82,12 +103,31 @@ fun SubListScreen(
     // 현재 정렬 방식을 State로 관리
     var currentSortType by remember { mutableStateOf(SortType.fromString(AppPrefs.mediaSortType)) }
     
+    // 선택된 이미지 관리
+    var selectedMediaItems by remember { mutableStateOf(setOf<Long>()) }
+    var isSelectionMode by remember { mutableStateOf(false) }
+    
+    // 액션 메뉴 상태
+    var showActionMenu by remember { mutableStateOf(false) }
+    var showFolderSelectionDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var actionType by remember { mutableStateOf<ActionType?>(null) }
+    
+    // 폴더 목록 (폴더 선택용)
+    val folderList by viewModel.folderList.collectAsState()
+    
     // 폴더 경로에서 폴더명 추출
     val folderName = folderPath.substringAfterLast("/", folderPath)
     
     // Back key 처리
     BackHandler {
-        onBackClick()
+        if (isSelectionMode) {
+            // 선택 모드일 때는 선택 모드 종료
+            isSelectionMode = false
+            selectedMediaItems = emptySet()
+        } else {
+            onBackClick()
+        }
     }
     
     // 화면 진입 시 해당 폴더의 미디어 로드
@@ -109,38 +149,138 @@ fun SubListScreen(
     
     // 미디어 클릭 처리 함수
     val handleMediaClick = { mediaItem: com.lee.quickgallery.util.MediaItem ->
-        if (mediaItem.mimeType.startsWith("video/")) {
-            // 비디오 파일인 경우 외부 영상 플레이어 앱으로 연결
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(mediaItem.uri, mediaItem.mimeType)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (isSelectionMode) {
+            // 선택 모드일 때는 선택 상태 토글
+            val newSelectedItems = if (selectedMediaItems.contains(mediaItem.id)) {
+                selectedMediaItems - mediaItem.id
+            } else {
+                selectedMediaItems + mediaItem.id
             }
-            try {
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                // 영상 플레이어 앱이 없는 경우 기본 앱 선택 다이얼로그 표시
-                val chooserIntent = Intent.createChooser(intent, "영상 재생")
-                context.startActivity(chooserIntent)
+            selectedMediaItems = newSelectedItems
+            
+            if (newSelectedItems.isEmpty()) {
+                isSelectionMode = false
             }
         } else {
-            // 이미지 파일인 경우 ViewerScreen으로 이동
-            onMediaClick(mediaItem.uri.toString())
+            // 일반 모드일 때는 기존 동작
+            if (mediaItem.mimeType.startsWith("video/")) {
+                // 비디오 파일인 경우 외부 영상 플레이어 앱으로 연결
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(mediaItem.uri, mediaItem.mimeType)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    // 영상 플레이어 앱이 없는 경우 기본 앱 선택 다이얼로그 표시
+                    val chooserIntent = Intent.createChooser(intent, "영상 재생")
+                    context.startActivity(chooserIntent)
+                }
+            } else {
+                // 이미지 파일인 경우 ViewerScreen으로 이동
+                onMediaClick(mediaItem.uri.toString())
+            }
         }
+    }
+    
+    // 롱클릭 처리 함수
+    val handleMediaLongClick = { mediaItem: com.lee.quickgallery.util.MediaItem ->
+        if (!isSelectionMode) {
+            isSelectionMode = true
+            selectedMediaItems = setOf(mediaItem.id)
+        }
+    }
+    
+    // 액션 처리 함수들
+    val handleAction = { selectedAction: ActionType ->
+        actionType = selectedAction
+        showActionMenu = false
+        
+        when (selectedAction) {
+            ActionType.MOVE, ActionType.COPY -> {
+                showFolderSelectionDialog = true
+            }
+            ActionType.SHARE -> {
+                // 공유 기능 구현
+                val selectedItems = mediaList.filter { selectedMediaItems.contains(it.id) }
+                if (selectedItems.isNotEmpty()) {
+                    val shareIntent = Intent().apply {
+                        action = Intent.ACTION_SEND_MULTIPLE
+                        type = "image/*"
+                        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(selectedItems.map { it.uri }))
+                    }
+                    val chooserIntent = Intent.createChooser(shareIntent, "공유")
+                    context.startActivity(chooserIntent)
+                }
+            }
+            ActionType.DELETE -> {
+                showDeleteConfirmDialog = true
+            }
+        }
+    }
+    
+    // 폴더 선택 처리
+    val handleFolderSelection = { targetFolderPath: String ->
+        val selectedItems = mediaList.filter { selectedMediaItems.contains(it.id) }
+        when (actionType) {
+            ActionType.MOVE -> {
+                // 이동 로직 구현
+                viewModel.moveMediaItems(selectedItems, targetFolderPath)
+            }
+            ActionType.COPY -> {
+                // 복사 로직 구현
+                viewModel.copyMediaItems(selectedItems, targetFolderPath)
+            }
+            else -> {}
+        }
+        
+        // 선택 모드 종료
+        isSelectionMode = false
+        selectedMediaItems = emptySet()
+        showFolderSelectionDialog = false
+        actionType = null
+    }
+    
+    // 삭제 확인 처리
+    val handleDeleteConfirm = {
+        val selectedItems = mediaList.filter { selectedMediaItems.contains(it.id) }
+        viewModel.deleteMediaItems(selectedItems)
+        
+        // 선택 모드 종료
+        isSelectionMode = false
+        selectedMediaItems = emptySet()
+        showDeleteConfirmDialog = false
     }
     
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = folderName,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold
+                    if (isSelectionMode) {
+                        Text(
+                            text = "${selectedMediaItems.size}개 선택됨",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            )
                         )
-                    )
+                    } else {
+                        Text(
+                            text = folderName,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(onClick = {
+                        if (isSelectionMode) {
+                            isSelectionMode = false
+                            selectedMediaItems = emptySet()
+                        } else {
+                            onBackClick()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "뒤로가기"
@@ -148,13 +288,53 @@ fun SubListScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.loadMediaByFolder(folderPath) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "새로고침"
-                        )
+                    if (isSelectionMode) {
+                        // 선택 모드일 때는 액션 메뉴 버튼
+                        IconButton(
+                            onClick = { showActionMenu = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "액션 메뉴"
+                            )
+                        }
+                        
+                        // DropdownMenu
+                        DropdownMenu(
+                            expanded = showActionMenu,
+                            onDismissRequest = { showActionMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("이동") },
+                                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                                onClick = { handleAction(ActionType.MOVE) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("복사") },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                onClick = { handleAction(ActionType.COPY) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("공유") },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                onClick = { handleAction(ActionType.SHARE) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("삭제") },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                onClick = { handleAction(ActionType.DELETE) }
+                            )
+                        }
+                    } else {
+                        // 일반 모드일 때는 새로고침 버튼
+                        IconButton(
+                            onClick = { viewModel.loadMediaByFolder(folderPath) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "새로고침"
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -353,7 +533,9 @@ fun SubListScreen(
                             ) { mediaItem ->
                                 MediaThumbnail(
                                     mediaItem = mediaItem,
-                                    onClick = { handleMediaClick(mediaItem) }
+                                    onClick = { handleMediaClick(mediaItem) },
+                                    isSelected = selectedMediaItems.contains(mediaItem.id),
+                                    onLongClick = { handleMediaLongClick(mediaItem) }
                                 )
                             }
                         }
@@ -528,5 +710,92 @@ fun SubListScreen(
                 }
             }
         }
+        
+        // 폴더 선택 다이얼로그
+        if (showFolderSelectionDialog) {
+            FolderSelectionDialog(
+                folderList = folderList,
+                onFolderSelected = handleFolderSelection,
+                onDismiss = { 
+                    showFolderSelectionDialog = false
+                    actionType = null
+                }
+            )
+        }
+        
+        // 삭제 확인 다이얼로그
+        if (showDeleteConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmDialog = false },
+                title = { Text("삭제 확인") },
+                text = { Text("${selectedMediaItems.size}개의 이미지를 삭제하시겠습니까?") },
+                confirmButton = {
+                    Button(
+                        onClick = handleDeleteConfirm
+                    ) {
+                        Text("확인")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteConfirmDialog = false }
+                    ) {
+                        Text("취소")
+                    }
+                }
+            )
+        }
     }
+}
+
+// 폴더 선택 다이얼로그
+@Composable
+fun FolderSelectionDialog(
+    folderList: List<com.lee.quickgallery.model.FolderItem>,
+    onFolderSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("폴더 선택") },
+        text = {
+            Column {
+                folderList.forEach { folder ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { onFolderSelected(folder.folderPath) },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = folder.folderName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text(
+                                text = "${folder.mediaCount}개",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("취소")
+            }
+        }
+    )
 } 

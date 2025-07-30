@@ -7,10 +7,12 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 
 data class MediaItem(
     val id: Long,
@@ -561,6 +563,32 @@ class MediaStoreUtil(private val context: Context) {
     }
     
     /**
+     * URI에서 실제 파일 객체를 가져옵니다.
+     */
+    private fun getFileFromUri(uri: Uri): File? {
+        return try {
+            when (uri.scheme) {
+                "file" -> File(uri.path ?: "")
+                "content" -> {
+                    // Content URI인 경우 임시 파일로 복사
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val tempFile = File.createTempFile("temp_", ".tmp", context.cacheDir)
+                    inputStream?.use { input ->
+                        tempFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    tempFile
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "URI에서 파일 가져오기 실패: $uri")
+            null
+        }
+    }
+    
+    /**
      * RELATIVE_PATH에서 폴더 경로를 추출합니다.
      */
     private fun getFolderPathFromRelativePath(relativePath: String): String {
@@ -577,5 +605,120 @@ class MediaStoreUtil(private val context: Context) {
             Timber.tag(TAG).e(e, "RELATIVE_PATH에서 폴더 경로 추출 중 오류")
             ""
         }
+    }
+    
+    /**
+     * 미디어 파일을 이동합니다.
+     */
+    suspend fun moveMediaItems(mediaItems: List<MediaItem>, targetFolderPath: String): Int = withContext(Dispatchers.IO) {
+        var successCount = 0
+        
+        try {
+            for (mediaItem in mediaItems) {
+                try {
+                    // URI에서 실제 파일 경로 가져오기
+                    val sourceFile = getFileFromUri(mediaItem.uri)
+                    if (sourceFile != null && sourceFile.exists()) {
+                        // 대상 폴더 생성 (외부 저장소의 Pictures 폴더 내)
+                        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                        val targetDir = File(picturesDir, targetFolderPath)
+                        if (!targetDir.exists()) {
+                            targetDir.mkdirs()
+                        }
+                        
+                        val targetFile = File(targetDir, mediaItem.name)
+                        
+                        // 파일 이동
+                        if (sourceFile.renameTo(targetFile)) {
+                            successCount++
+                            Timber.tag(TAG).d("미디어 이동 성공: ${mediaItem.name}")
+                        } else {
+                            Timber.tag(TAG).w("미디어 이동 실패: ${mediaItem.name}")
+                        }
+                    } else {
+                        Timber.tag(TAG).w("소스 파일을 찾을 수 없음: ${mediaItem.name}")
+                    }
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "미디어 이동 중 오류: ${mediaItem.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "미디어 이동 작업 중 오류 발생")
+        }
+        
+        Timber.tag(TAG).d("미디어 이동 완료: $successCount/${mediaItems.size}개")
+        successCount
+    }
+    
+    /**
+     * 미디어 파일을 복사합니다.
+     */
+    suspend fun copyMediaItems(mediaItems: List<MediaItem>, targetFolderPath: String): Int = withContext(Dispatchers.IO) {
+        var successCount = 0
+        
+        try {
+            for (mediaItem in mediaItems) {
+                try {
+                    // URI에서 실제 파일 경로 가져오기
+                    val sourceFile = getFileFromUri(mediaItem.uri)
+                    if (sourceFile != null && sourceFile.exists()) {
+                        // 대상 폴더 생성 (외부 저장소의 Pictures 폴더 내)
+                        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                        val targetDir = File(picturesDir, targetFolderPath)
+                        if (!targetDir.exists()) {
+                            targetDir.mkdirs()
+                        }
+                        
+                        val targetFile = File(targetDir, mediaItem.name)
+                        
+                        // 파일 복사
+                        if (sourceFile.copyTo(targetFile, overwrite = true).exists()) {
+                            successCount++
+                            Timber.tag(TAG).d("미디어 복사 성공: ${mediaItem.name}")
+                        } else {
+                            Timber.tag(TAG).w("미디어 복사 실패: ${mediaItem.name}")
+                        }
+                    } else {
+                        Timber.tag(TAG).w("소스 파일을 찾을 수 없음: ${mediaItem.name}")
+                    }
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "미디어 복사 중 오류: ${mediaItem.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "미디어 복사 작업 중 오류 발생")
+        }
+        
+        Timber.tag(TAG).d("미디어 복사 완료: $successCount/${mediaItems.size}개")
+        successCount
+    }
+    
+    /**
+     * 미디어 파일을 삭제합니다.
+     */
+    suspend fun deleteMediaItems(mediaItems: List<MediaItem>): Int = withContext(Dispatchers.IO) {
+        var successCount = 0
+        
+        try {
+            for (mediaItem in mediaItems) {
+                try {
+                    // URI에서 실제 파일 경로 가져오기
+                    val file = getFileFromUri(mediaItem.uri)
+                    if (file != null && file.exists() && file.delete()) {
+                        successCount++
+                        Timber.tag(TAG).d("미디어 삭제 성공: ${mediaItem.name}")
+                    } else {
+                        Timber.tag(TAG).w("미디어 삭제 실패: ${mediaItem.name}")
+                    }
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "미디어 삭제 중 오류: ${mediaItem.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "미디어 삭제 작업 중 오류 발생")
+        }
+        
+        Timber.tag(TAG).d("미디어 삭제 완료: $successCount/${mediaItems.size}개")
+        successCount
     }
 } 

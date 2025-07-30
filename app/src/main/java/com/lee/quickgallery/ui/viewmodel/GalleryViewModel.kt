@@ -310,4 +310,93 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun clearError() {
         _errorMessage.value = null
     }
+    
+    // 미디어 이동
+    fun moveMediaItems(mediaItems: List<MediaItem>, targetFolderPath: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+                
+                Timber.tag(TAG).d("미디어 이동 시작: ${mediaItems.size}개 -> $targetFolderPath")
+                
+                // 실제 파일 시스템에서 이동 작업 수행
+                val successCount = mediaStoreUtil.moveMediaItems(mediaItems, targetFolderPath)
+                
+                if (successCount > 0) {
+                    Timber.tag(TAG).d("미디어 이동 완료: ${successCount}개")
+                    // 현재 폴더의 미디어 목록 새로고침
+                    loadMediaByFolder(mediaItems.firstOrNull()?.relativePath ?: "")
+                } else {
+                    _errorMessage.value = "미디어 이동에 실패했습니다."
+                }
+                
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "미디어 이동 중 오류 발생")
+                _errorMessage.value = "미디어 이동 중 오류가 발생했습니다: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    // 미디어 복사
+    fun copyMediaItems(mediaItems: List<MediaItem>, targetFolderPath: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+                
+                Timber.tag(TAG).d("미디어 복사 시작: ${mediaItems.size}개 -> $targetFolderPath")
+                
+                // 실제 파일 시스템에서 복사 작업 수행
+                val successCount = mediaStoreUtil.copyMediaItems(mediaItems, targetFolderPath)
+                
+                if (successCount > 0) {
+                    Timber.tag(TAG).d("미디어 복사 완료: ${successCount}개")
+                    // 폴더 목록 새로고침 (미디어 개수 변경 가능성)
+                    loadFolders()
+                } else {
+                    _errorMessage.value = "미디어 복사에 실패했습니다."
+                }
+                
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "미디어 복사 중 오류 발생")
+                _errorMessage.value = "미디어 복사 중 오류가 발생했습니다: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    // 미디어 삭제
+    fun deleteMediaItems(mediaItems: List<MediaItem>) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+                
+                Timber.tag(TAG).d("미디어 삭제 시작: ${mediaItems.size}개")
+                
+                // 실제 파일 시스템에서 삭제 작업 수행
+                val successCount = mediaStoreUtil.deleteMediaItems(mediaItems)
+                
+                if (successCount > 0) {
+                    Timber.tag(TAG).d("미디어 삭제 완료: ${successCount}개")
+                    // 현재 폴더의 미디어 목록 새로고침
+                    loadMediaByFolder(mediaItems.firstOrNull()?.relativePath ?: "")
+                    // 폴더 목록 새로고침 (미디어 개수 변경)
+                    loadFolders()
+                } else {
+                    _errorMessage.value = "미디어 삭제에 실패했습니다."
+                }
+                
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "미디어 삭제 중 오류 발생")
+                _errorMessage.value = "미디어 삭제 중 오류가 발생했습니다: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
 } 
