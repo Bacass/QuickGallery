@@ -452,7 +452,7 @@ class MediaStoreUtil(private val context: Context) {
             
             context.contentResolver.query(
                 imageCollection,
-                arrayOf("COUNT(*)"),
+                arrayOf("COUNT(1)"),
                 imageSelection,
                 imageSelectionArgs,
                 null
@@ -482,7 +482,7 @@ class MediaStoreUtil(private val context: Context) {
             
             context.contentResolver.query(
                 videoCollection,
-                arrayOf("COUNT(*)"),
+                arrayOf("COUNT(1)"),
                 videoSelection,
                 videoSelectionArgs,
                 null

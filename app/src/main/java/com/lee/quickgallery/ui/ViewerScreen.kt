@@ -1,5 +1,6 @@
 package com.lee.quickgallery.ui
 
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -26,18 +27,15 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-
-
-
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.components.FullScreenImage
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
@@ -140,10 +138,11 @@ private fun ZoomableImage(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var pointerCount by remember { mutableStateOf(0) }
     
-    // 상수들을 일반 val로 선언
+    // 상수들을 companion object로 이동
     val minScale = 1f
-    val maxScale = 3f
+    val maxScale = 5f
     val zoomScale = 2f
     
     // 페이지가 변경되면 줌 상태 초기화
@@ -153,6 +152,11 @@ private fun ZoomableImage(
             offset = Offset.Zero
             onZoomChanged(false)
         }
+    }
+    
+    // 줌 상태 알림
+    LaunchedEffect(scale) {
+        onZoomChanged(scale > minScale)
     }
     
     Box(
@@ -170,27 +174,81 @@ private fun ZoomableImage(
                     translationY = offset.y
                 )
                 .pointerInput(Unit) {
-                    // 더블 탭 제스처만 사용 (스와이프와 충돌하지 않음)
+                    // 포인터 개수 추적
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            when (event.type) {
+                                PointerEventType.Press -> {
+                                    pointerCount = event.changes.size
+                                }
+                                PointerEventType.Release -> {
+                                    pointerCount = 0
+                                }
+                                PointerEventType.Move -> {
+                                    pointerCount = event.changes.size
+                                }
+                                else -> {}
+                            }
+                        }
+                    }
+                }
+                .pointerInput(Unit) {
+                    // 핀치줌과 팬 제스처 처리 (두 손가락일 때만)
+                    detectTransformGestures(
+                        panZoomLock = true
+                    ) { centroid, pan, zoom, _ ->
+                        if (isCurrentPage && pointerCount >= 2) {
+                            val newScale = (scale * zoom).coerceIn(minScale, maxScale)
+                            
+                            if (newScale != scale) {
+                                // 핀치줌 시 중심점 기준으로 스케일링
+                                val newOffset = if (newScale > minScale) {
+                                    // 확대 시 중심점을 기준으로 오프셋 조절
+                                    val centerX = size.width / 2f
+                                    val centerY = size.height / 2f
+                                    Offset(
+                                        x = (offset.x + (centerX - centroid.x) * (zoom - 1)) * (newScale / scale),
+                                        y = (offset.y + (centerY - centroid.y) * (zoom - 1)) * (newScale / scale)
+                                    )
+                                } else {
+                                    // 최소 스케일로 돌아갈 때는 중앙으로
+                                    Offset.Zero
+                                }
+                                
+                                scale = newScale
+                                offset = newOffset
+                            } else if (scale > minScale) {
+                                // 팬 제스처 처리 (확대된 상태에서만)
+                                val maxOffsetX = (size.width * (scale - 1)) / 2f
+                                val maxOffsetY = (size.height * (scale - 1)) / 2f
+                                
+                                offset = Offset(
+                                    x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
+                                    y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                )
+                            }
+                        }
+                    }
+                }
+                .pointerInput(Unit) {
+                    // 더블 탭 제스처 처리 (한 손가락일 때만)
                     detectTapGestures(
                         onDoubleTap = { tapOffset ->
-                            if (isCurrentPage) {
-                                // 더블 탭으로 줌 토글
+                            if (isCurrentPage && pointerCount <= 1) {
                                 if (scale > minScale) {
                                     // 줌 아웃
                                     scale = minScale
                                     offset = Offset.Zero
-                                    onZoomChanged(false)
                                 } else {
                                     // 줌 인 (탭한 위치를 중심으로)
                                     scale = zoomScale
-                                    // 화면 중앙 기준으로 오프셋 계산
                                     val centerX = size.width / 2f
                                     val centerY = size.height / 2f
                                     offset = Offset(
                                         x = (centerX - tapOffset.x) * (scale - 1),
                                         y = (centerY - tapOffset.y) * (scale - 1)
                                     )
-                                    onZoomChanged(true)
                                 }
                             }
                         }
