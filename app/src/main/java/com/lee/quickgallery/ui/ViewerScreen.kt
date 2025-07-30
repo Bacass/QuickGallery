@@ -320,18 +320,30 @@ private fun ZoomableImage(
                                     val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
                                     
                                     if (newScale > minScale) {
+                                        // 핀치줌 중심점을 기준으로 확대/축소
+                                        val oldScale = scale
                                         scale = newScale
                                         
-                                        // 팬 처리 개선 - 더 빠른 반응
+                                        // 핀치줌 중심점을 이미지 좌표계로 변환
+                                        val imageCenterX = size.width / 2f
+                                        val imageCenterY = size.height / 2f
+                                        val zoomCenterX = centroid.x - imageCenterX
+                                        val zoomCenterY = centroid.y - imageCenterY
+                                        
+                                        // 스케일 변화에 따른 오프셋 조정
+                                        val scaleRatio = newScale / oldScale
+                                        offset = Offset(
+                                            x = zoomCenterX - (zoomCenterX - offset.x) * scaleRatio,
+                                            y = zoomCenterY - (zoomCenterY - offset.y) * scaleRatio
+                                        )
+                                        
+                                        // 팬 처리 추가
                                         val maxOffsetX = (size.width * (scale - 1)) / 2f
                                         val maxOffsetY = (size.height * (scale - 1)) / 2f
-                                        val oldOffset = offset
                                         offset = Offset(
                                             x = (offset.x + panChange.x).coerceIn(-maxOffsetX, maxOffsetX),
                                             y = (offset.y + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
                                         )
-                                        
-
                                     } else {
                                         scale = minScale
                                         offset = Offset.Zero
