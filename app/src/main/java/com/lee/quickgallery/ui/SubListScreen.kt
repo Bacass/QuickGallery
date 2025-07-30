@@ -359,7 +359,7 @@ fun SubListScreen(
                             val safeContainerHeight = containerHeightDp.coerceAtLeast(100f) // 최소 100dp 보장
                             
                             // 절대적으로 안전한 스크롤 범위 (컨테이너의 90%만 사용하여 확실한 안전 마진)
-                            val absoluteSafeRange = (safeContainerHeight * 0.9f - thumbHeight.value).coerceAtLeast(0f)
+                            val absoluteSafeRange = (safeContainerHeight * 0.95f - thumbHeight.value).coerceAtLeast(0f)
                             
                             // Thumb 위치 - 절대적으로 안전한 범위 내에서만 이동
                             val thumbOffset = if (absoluteSafeRange > 0f && containerHeightPx > 0) {
@@ -413,7 +413,7 @@ fun SubListScreen(
                                                 }
                                                 
                                                 // 절대적으로 안전한 범위 (90% 사용)
-                                                val absoluteSafeRange = (safeContainerHeight * 0.9f - thumbHeight).coerceAtLeast(0f)
+                                                val absoluteSafeRange = (safeContainerHeight * 0.95f - thumbHeight).coerceAtLeast(0f)
                                                 
                                                 // 드래그 계산 - 절대적으로 안전한 범위 내에서만
                                                 val currentOffset = scrollProgress * absoluteSafeRange
