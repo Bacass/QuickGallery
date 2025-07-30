@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +40,47 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.components.FullScreenImage
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
+import kotlin.math.sqrt
+
+// PointerEvent 확장 함수들
+private fun PointerEvent.calculateZoom(): Float {
+    if (changes.size < 2) return 1f
+    
+    val currentDistance = calculateDistance(changes[0].position, changes[1].position)
+    val previousDistance = calculateDistance(changes[0].previousPosition, changes[1].previousPosition)
+    
+    return if (previousDistance > 0f) currentDistance / previousDistance else 1f
+}
+
+private fun PointerEvent.calculatePan(): Offset {
+    if (changes.size < 2) return Offset.Zero
+    
+    val currentCentroid = calculateCentroid()
+    val previousCentroid = Offset(
+        x = (changes[0].previousPosition.x + changes[1].previousPosition.x) / 2f,
+        y = (changes[0].previousPosition.y + changes[1].previousPosition.y) / 2f
+    )
+    
+    return currentCentroid - previousCentroid
+}
+
+private fun PointerEvent.calculateCentroid(): Offset {
+    if (changes.isEmpty()) return Offset.Zero
+    
+    val sumX = changes.sumOf { it.position.x.toDouble() }
+    val sumY = changes.sumOf { it.position.y.toDouble() }
+    
+    return Offset(
+        x = (sumX / changes.size).toFloat(),
+        y = (sumY / changes.size).toFloat()
+    )
+}
+
+private fun calculateDistance(point1: Offset, point2: Offset): Float {
+    val dx = point1.x - point2.x
+    val dy = point1.y - point2.y
+    return sqrt(dx * dx + dy * dy)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,9 +180,8 @@ private fun ZoomableImage(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var pointerCount by remember { mutableStateOf(0) }
     
-    // 상수들을 companion object로 이동
+    // 상수들
     val minScale = 1f
     val maxScale = 5f
     val zoomScale = 2f
@@ -174,59 +215,45 @@ private fun ZoomableImage(
                     translationY = offset.y
                 )
                 .pointerInput(Unit) {
-                    // 포인터 개수 추적
+                    // 포인터 이벤트 직접 처리
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            when (event.type) {
-                                PointerEventType.Press -> {
-                                    pointerCount = event.changes.size
-                                }
-                                PointerEventType.Release -> {
-                                    pointerCount = 0
-                                }
-                                PointerEventType.Move -> {
-                                    pointerCount = event.changes.size
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-                }
-                .pointerInput(Unit) {
-                    // 핀치줌과 팬 제스처 처리 (두 손가락일 때만)
-                    detectTransformGestures(
-                        panZoomLock = true
-                    ) { centroid, pan, zoom, _ ->
-                        if (isCurrentPage && pointerCount >= 2) {
-                            val newScale = (scale * zoom).coerceIn(minScale, maxScale)
                             
-                            if (newScale != scale) {
-                                // 핀치줌 시 중심점 기준으로 스케일링
+                            if (!isCurrentPage) continue
+                            
+                            val touchPoints = event.changes
+                            
+                            if (touchPoints.size >= 2) {
+                                // 두 손가락 핀치 줌
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
+                                val centroid = event.calculateCentroid()
+                                
+                                val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+                                
                                 val newOffset = if (newScale > minScale) {
-                                    // 확대 시 중심점을 기준으로 오프셋 조절
                                     val centerX = size.width / 2f
                                     val centerY = size.height / 2f
                                     Offset(
-                                        x = (offset.x + (centerX - centroid.x) * (zoom - 1)) * (newScale / scale),
-                                        y = (offset.y + (centerY - centroid.y) * (zoom - 1)) * (newScale / scale)
+                                        x = (offset.x + (centerX - centroid.x) * (zoomChange - 1)) * (newScale / scale),
+                                        y = (offset.y + (centerY - centroid.y) * (zoomChange - 1)) * (newScale / scale)
                                     )
                                 } else {
-                                    // 최소 스케일로 돌아갈 때는 중앙으로
                                     Offset.Zero
                                 }
                                 
                                 scale = newScale
                                 offset = newOffset
-                            } else if (scale > minScale) {
-                                // 팬 제스처 처리 (확대된 상태에서만)
-                                val maxOffsetX = (size.width * (scale - 1)) / 2f
-                                val maxOffsetY = (size.height * (scale - 1)) / 2f
                                 
-                                offset = Offset(
-                                    x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
-                                    y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
-                                )
+                                if (scale > minScale) {
+                                    val maxOffsetX = (size.width * (scale - 1)) / 2f
+                                    val maxOffsetY = (size.height * (scale - 1)) / 2f
+                                    offset = Offset(
+                                        x = (offset.x + panChange.x).coerceIn(-maxOffsetX, maxOffsetX),
+                                        y = (offset.y + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                    )
+                                }
                             }
                         }
                     }
@@ -235,7 +262,7 @@ private fun ZoomableImage(
                     // 더블 탭 제스처 처리 (한 손가락일 때만)
                     detectTapGestures(
                         onDoubleTap = { tapOffset ->
-                            if (isCurrentPage && pointerCount <= 1) {
+                            if (isCurrentPage) {
                                 if (scale > minScale) {
                                     // 줌 아웃
                                     scale = minScale
