@@ -11,12 +11,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.MainScreen
 import com.lee.quickgallery.ui.PermissionScreen
 import com.lee.quickgallery.ui.SettingScreen
 import com.lee.quickgallery.ui.SplashScreen
 import com.lee.quickgallery.ui.SubListScreen
 import com.lee.quickgallery.ui.theme.QuickGalleryTheme
+import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +36,9 @@ class MainActivity : ComponentActivity() {
 fun QuickGalleryApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var selectedFolderPath by remember { mutableStateOf<String?>(null) }
+    
+    // 공유 ViewModel 인스턴스
+    val sharedViewModel: GalleryViewModel = viewModel()
     
     when (currentScreen) {
         Screen.Splash -> {
@@ -61,7 +66,8 @@ fun QuickGalleryApp() {
                 },
                 onSettingsClick = {
                     currentScreen = Screen.Settings
-                }
+                },
+                viewModel = sharedViewModel
             )
         }
         Screen.SubList -> {
@@ -73,7 +79,8 @@ fun QuickGalleryApp() {
                     },
                     onMediaClick = { mediaUri ->
                         // 미디어 클릭 시 처리 (예: 상세 보기, 공유 등)
-                    }
+                    },
+                    viewModel = sharedViewModel
                 )
             }
         }
@@ -81,7 +88,8 @@ fun QuickGalleryApp() {
             SettingScreen(
                 onBackClick = {
                     currentScreen = Screen.Main
-                }
+                },
+                viewModel = sharedViewModel
             )
         }
     }

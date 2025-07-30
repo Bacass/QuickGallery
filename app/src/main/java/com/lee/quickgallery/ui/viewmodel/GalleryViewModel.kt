@@ -7,6 +7,8 @@ import com.lee.quickgallery.model.FolderItem
 import com.lee.quickgallery.util.MediaItem
 import com.lee.quickgallery.util.MediaStoreUtil
 import com.lee.quickgallery.util.PermissionUtil
+import com.lee.quickgallery.util.AppPrefs
+import com.lee.quickgallery.util.SortType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +42,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     
     private val _totalMediaCount = MutableStateFlow(0)
     val totalMediaCount: StateFlow<Int> = _totalMediaCount.asStateFlow()
+    
+    private val _currentSortType = MutableStateFlow(SortType.fromString(AppPrefs.mediaSortType))
+    val currentSortType: StateFlow<SortType> = _currentSortType.asStateFlow()
     
     init {
         checkPermission()
@@ -94,13 +99,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                Timber.tag(TAG).d("폴더 로딩 시작")
+                // 현재 설정된 정렬 방식 가져오기
+                val sortType = SortType.fromString(AppPrefs.mediaSortType)
+                
+                Timber.tag(TAG).d("폴더 로딩 시작, 정렬: ${sortType.displayName}")
                 
                 // 이미지 수에 따라 캐시 크기 설정
                 val totalImageCount = mediaStoreUtil.getTotalImageCount()
                 mediaStoreUtil.thumbnailCacheManager.setCacheSizeBasedOnImageCount(totalImageCount)
                 
-                val folderMap = mediaStoreUtil.getMediaGroupedByFolder()
+                val folderMap = mediaStoreUtil.getMediaGroupedByFolder(sortType)
                 
                 val folderItems = folderMap.mapNotNull { (folderPath, mediaList) ->
                     FolderItem.create(folderPath, mediaList)
@@ -108,7 +116,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 
                 _folderList.value = folderItems
                 
-                Timber.tag(TAG).d("폴더 로딩 완료: ${folderItems.size}개")
+                Timber.tag(TAG).d("폴더 로딩 완료: ${folderItems.size}개, 정렬: ${sortType.displayName}")
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "폴더 로딩 중 오류 발생")
@@ -163,7 +171,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     
-    fun loadMediaByFolder(folderPath: String) {
+    fun loadMediaByFolder(folderPath: String, forceRefresh: Boolean = false) {
         if (!_hasPermission.value) return
         
         viewModelScope.launch {
@@ -171,9 +179,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
+                // 현재 설정된 정렬 방식 가져오기
+                val sortType = SortType.fromString(AppPrefs.mediaSortType)
+                
+                Timber.tag(TAG).d("폴더별 미디어 로딩 시작: $folderPath, 정렬: ${sortType.displayName}, 강제새로고침: $forceRefresh")
+                
                 // 폴더별 전체 미디어 수와 실제 미디어를 병렬로 조회
                 val (media, totalCount) = coroutineScope {
-                    val mediaDeferred = async { mediaStoreUtil.getMediaByFolder(folderPath) }
+                    val mediaDeferred = async { mediaStoreUtil.getMediaByFolder(folderPath, sortType) }
                     val totalCountDeferred = async { mediaStoreUtil.getMediaCountByFolder(folderPath) }
                     
                     mediaDeferred.await() to totalCountDeferred.await()
@@ -182,7 +195,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _mediaList.value = media
                 _totalMediaCount.value = totalCount
                 
-                Timber.tag(TAG).d("폴더별 미디어 로딩 완료: ${media.size}개 (전체: ${totalCount}개)")
+                Timber.tag(TAG).d("폴더별 미디어 로딩 완료: ${media.size}개 (전체: ${totalCount}개), 정렬: ${sortType.displayName}")
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "폴더별 미디어 로딩 중 오류 발생")
@@ -195,6 +208,33 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     
     fun refreshMedia() {
         loadFolders()
+    }
+    
+    // 정렬 방식이 변경되었을 때 강제로 폴더 새로고침
+    fun refreshFoldersWithNewSort() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            loadFolders()
+        }
+    }
+    
+    // 정렬 방식 업데이트 (SettingScreen에서 호출)
+    fun updateSortType(newSortType: SortType) {
+        if (_currentSortType.value != newSortType) {
+            _currentSortType.value = newSortType
+            AppPrefs.mediaSortType = newSortType.name
+            // 폴더 목록 자동 새로고침
+            refreshFoldersWithNewSort()
+        }
+    }
+    
+    // 정렬 방식 동기화 (MainScreen에서 호출)
+    fun syncSortType() {
+        val currentPrefSortType = SortType.fromString(AppPrefs.mediaSortType)
+        if (_currentSortType.value != currentPrefSortType) {
+            _currentSortType.value = currentPrefSortType
+            refreshFoldersWithNewSort()
+        }
     }
     
     fun clearError() {

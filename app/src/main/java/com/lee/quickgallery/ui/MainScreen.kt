@@ -26,6 +26,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.components.FolderThumbnail
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
+import com.lee.quickgallery.util.AppPrefs
+import com.lee.quickgallery.util.SortType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +52,15 @@ fun MainScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val hasPermission by viewModel.hasPermission.collectAsState()
+    val currentSortType by viewModel.currentSortType.collectAsState()
+    
+    // MainScreen이 나타날 때마다 정렬 방식 동기화
+    DisposableEffect(Unit) {
+        // 화면이 나타날 때 정렬 방식 동기화
+        viewModel.syncSortType()
+        
+        onDispose { }
+    }
     
     Scaffold(
         topBar = {

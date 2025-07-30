@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.lee.quickgallery.model.FolderItem
 import com.lee.quickgallery.util.MediaStoreUtil
+import com.lee.quickgallery.util.AppPrefs
 
 @Composable
 fun FolderThumbnail(
@@ -144,15 +145,18 @@ fun FolderThumbnail(
                         overflow = TextOverflow.Ellipsis
                     )
                     
-                    Text(
-                        text = "${folderItem.mediaCount}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp
-                        ),
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // 설정에 따라 미디어 개수 표시
+                    if (AppPrefs.showMediaCount) {
+                        Text(
+                            text = "${folderItem.mediaCount}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.sp
+                            ),
+                            color = Color.White.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

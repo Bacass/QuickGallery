@@ -217,7 +217,7 @@ class MediaStoreUtil(private val context: Context) {
     /**
      * 특정 폴더의 미디어를 조회합니다.
      */
-    suspend fun getMediaByFolder(folderPath: String): List<MediaItem> = withContext(Dispatchers.IO) {
+    suspend fun getMediaByFolder(folderPath: String, sortType: SortType = SortType.TIME_DESC): List<MediaItem> = withContext(Dispatchers.IO) {
         val media = mutableListOf<MediaItem>()
         
         try {
@@ -246,13 +246,16 @@ class MediaStoreUtil(private val context: Context) {
                 arrayOf(normalizedFolderPath, "$normalizedFolderPath/")
             }
             
+            // 데이터베이스에서 가져올 때 기본 정렬은 ID 순으로 하고, 나중에 메모리에서 정렬
+            val baseSortOrder = "${MediaStore.MediaColumns._ID} ASC"
+            
             Timber.tag(TAG).d("이미지 쿼리: $imageSelection, args: ${imageSelectionArgs.joinToString()}")
             context.contentResolver.query(
                 imageCollection,
                 PROJECTION,
                 imageSelection,
                 imageSelectionArgs,
-                "${MediaStore.MediaColumns.DATE_ADDED} DESC"
+                baseSortOrder
             )?.use { cursor ->
                 val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
                 val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
@@ -319,7 +322,7 @@ class MediaStoreUtil(private val context: Context) {
                 VIDEO_PROJECTION,
                 videoSelection,
                 videoSelectionArgs,
-                "${MediaStore.MediaColumns.DATE_ADDED} DESC"
+                baseSortOrder
             )?.use { cursor ->
                 val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
                 val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
@@ -364,13 +367,23 @@ class MediaStoreUtil(private val context: Context) {
                 }
             }
             
+            
             Timber.tag(TAG).d("폴더별 미디어 조회 완료: ${media.size}개")
             
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "폴더별 미디어 조회 중 오류 발생")
         }
         
-        media
+        // 선택된 정렬 방식에 따라 정렬
+        val sortedMedia = when (sortType) {
+            SortType.NAME_ASC -> media.sortedBy { it.name.lowercase() }
+            SortType.NAME_DESC -> media.sortedByDescending { it.name.lowercase() }
+            SortType.TIME_ASC -> media.sortedBy { it.dateAdded }
+            SortType.TIME_DESC -> media.sortedByDescending { it.dateAdded }
+        }
+        
+        Timber.tag(TAG).d("정렬 완료: ${sortType.displayName}")
+        sortedMedia
     }
     
     /**
@@ -491,7 +504,7 @@ class MediaStoreUtil(private val context: Context) {
     /**
      * 폴더별로 그룹화된 미디어를 조회합니다.
      */
-    suspend fun getMediaGroupedByFolder(): Map<String, List<MediaItem>> = withContext(Dispatchers.IO) {
+    suspend fun getMediaGroupedByFolder(sortType: SortType = SortType.TIME_DESC): Map<String, List<MediaItem>> = withContext(Dispatchers.IO) {
         val folderMap = mutableMapOf<String, MutableList<MediaItem>>()
         
         try {
@@ -506,9 +519,14 @@ class MediaStoreUtil(private val context: Context) {
                 }
             }
             
-            // 각 폴더 내에서 날짜순 정렬
+            // 각 폴더 내에서 선택된 정렬 방식으로 정렬
             folderMap.forEach { (_, mediaList) ->
-                mediaList.sortByDescending { it.dateAdded }
+                when (sortType) {
+                    SortType.NAME_ASC -> mediaList.sortBy { it.name.lowercase() }
+                    SortType.NAME_DESC -> mediaList.sortByDescending { it.name.lowercase() }
+                    SortType.TIME_ASC -> mediaList.sortBy { it.dateAdded }
+                    SortType.TIME_DESC -> mediaList.sortByDescending { it.dateAdded }
+                }
             }
             
         } catch (e: Exception) {

@@ -35,6 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +62,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lee.quickgallery.ui.components.MediaThumbnail
 import com.lee.quickgallery.ui.viewmodel.GalleryViewModel
+import com.lee.quickgallery.util.AppPrefs
+import com.lee.quickgallery.util.SortType
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -78,6 +83,9 @@ fun SubListScreen(
     val hasPermission by viewModel.hasPermission.collectAsState()
     val totalMediaCount by viewModel.totalMediaCount.collectAsState()
     
+    // 현재 정렬 방식을 State로 관리
+    var currentSortType by remember { mutableStateOf(SortType.fromString(AppPrefs.mediaSortType)) }
+    
     // 폴더 경로에서 폴더명 추출
     val folderName = folderPath.substringAfterLast("/", folderPath)
     
@@ -89,6 +97,18 @@ fun SubListScreen(
     // 화면 진입 시 해당 폴더의 미디어 로드
     LaunchedEffect(folderPath) {
         viewModel.loadMediaByFolder(folderPath)
+    }
+    
+    // 정렬 방식 변경 감지 및 새로고침
+    LaunchedEffect(Unit) {
+        while (true) {
+            val newSortType = SortType.fromString(AppPrefs.mediaSortType)
+            if (currentSortType != newSortType) {
+                currentSortType = newSortType
+                viewModel.loadMediaByFolder(folderPath, forceRefresh = true)
+            }
+            kotlinx.coroutines.delay(100) // 100ms마다 체크
+        }
     }
     
     Scaffold(
