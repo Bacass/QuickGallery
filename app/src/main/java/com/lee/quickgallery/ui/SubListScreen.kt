@@ -292,7 +292,7 @@ fun SubListScreen(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .padding(end = 10.dp, top = 16.dp, bottom = 16.dp)
+                                .padding(end = 10.dp, top = 50.dp, bottom = 16.dp)
                                 .width(10.dp)
                                 .fillMaxHeight()
                                 .onGloballyPositioned { coordinates ->
@@ -436,61 +436,61 @@ fun SubListScreen(
                         }
                         
                         // 날짜 표시 (스크롤 중이거나 드래그 중일 때 표시) - thumb 위치에 맞춰서 배치
-                        if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
-                            // thumb 위치 계산 (위에서 계산한 것과 동일한 로직)
-                            val layoutInfo = gridState.layoutInfo
-                            val visibleItems = layoutInfo.visibleItemsInfo
-                            val scrollProgress = if (visibleItems.isNotEmpty() && mediaList.isNotEmpty()) {
-                                val firstVisibleIndex = visibleItems.first().index
-                                val scrollableRange = mediaList.size - 1
-                                if (scrollableRange > 0) {
-                                    (firstVisibleIndex.toFloat() / scrollableRange).coerceIn(0f, 1f)
-                                } else {
-                                    0f
-                                }
-                            } else {
-                                0f
-                            }
-                            
-                            // 컨테이너 높이와 thumb 높이 계산
-                            val containerHeightDp = with(density) { containerHeightPx.toDp().value }
-                            val safeContainerHeight = containerHeightDp.coerceAtLeast(100f)
-                            val baseThumbHeight = 60f
-                            val thumbHeight = if (totalMediaCount > 0) {
-                                val ratio = mediaList.size.toFloat() / totalMediaCount
-                                (baseThumbHeight * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f)
-                            } else {
-                                baseThumbHeight
-                            }
-                            
-                            // thumb의 Y축 위치 계산
-                            val absoluteSafeRange = (safeContainerHeight * 1f - thumbHeight).coerceAtLeast(0f)
-                            val thumbYPosition = if (absoluteSafeRange > 0f && containerHeightPx > 0) {
-                                (scrollProgress * absoluteSafeRange).coerceIn(0f, absoluteSafeRange)
-                            } else {
-                                0f
-                            }
-                            
-                            // thumb 중앙에 맞춰서 날짜 팝업 위치 조정
-                            val datePopupYOffset = thumbYPosition + (thumbHeight / 2f) - 12f // 팝업 높이의 절반만큼 위로 조정
-                            
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = (-80).dp, y = datePopupYOffset.dp)
-                                    .wrapContentSize()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black.copy(alpha = 0.85f))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = currentDate,
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
+//                        if ((showDatePopup || isScrollbarDragging) && currentDate.isNotEmpty()) {
+//                            // thumb 위치 계산 (위에서 계산한 것과 동일한 로직)
+//                            val layoutInfo = gridState.layoutInfo
+//                            val visibleItems = layoutInfo.visibleItemsInfo
+//                            val scrollProgress = if (visibleItems.isNotEmpty() && mediaList.isNotEmpty()) {
+//                                val firstVisibleIndex = visibleItems.first().index
+//                                val scrollableRange = mediaList.size - 1
+//                                if (scrollableRange > 0) {
+//                                    (firstVisibleIndex.toFloat() / scrollableRange).coerceIn(0f, 1f)
+//                                } else {
+//                                    0f
+//                                }
+//                            } else {
+//                                0f
+//                            }
+//
+//                            // 컨테이너 높이와 thumb 높이 계산
+//                            val containerHeightDp = with(density) { containerHeightPx.toDp().value }
+//                            val safeContainerHeight = containerHeightDp.coerceAtLeast(100f)
+//                            val baseThumbHeight = 60f
+//                            val thumbHeight = if (totalMediaCount > 0) {
+//                                val ratio = mediaList.size.toFloat() / totalMediaCount
+//                                (baseThumbHeight * ratio.coerceIn(0.2f, 1f)).coerceAtMost(100f)
+//                            } else {
+//                                baseThumbHeight
+//                            }
+//
+//                            // thumb의 Y축 위치 계산
+//                            val absoluteSafeRange = (safeContainerHeight * 1f - thumbHeight).coerceAtLeast(0f)
+//                            val thumbYPosition = if (absoluteSafeRange > 0f && containerHeightPx > 0) {
+//                                (scrollProgress * absoluteSafeRange).coerceIn(0f, absoluteSafeRange)
+//                            } else {
+//                                0f
+//                            }
+//
+//                            // thumb 중앙에 맞춰서 날짜 팝업 위치 조정
+//                            val datePopupYOffset = thumbYPosition + (thumbHeight / 2f) - 12f // 팝업 높이의 절반만큼 위로 조정
+//
+//                            Box(
+//                                modifier = Modifier
+//                                    .align(Alignment.TopEnd)
+//                                    .offset(x = (-30).dp, y = datePopupYOffset.dp)
+//                                    .wrapContentSize()
+//                                    .clip(RoundedCornerShape(8.dp))
+//                                    .background(Color.Black.copy(alpha = 0.85f))
+//                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+//                            ) {
+//                                Text(
+//                                    text = currentDate,
+//                                    color = Color.White,
+//                                    fontSize = 14.sp,
+//                                    fontWeight = FontWeight.Medium
+//                                )
+//                            }
+//                        }
                     }
                 }
             }
