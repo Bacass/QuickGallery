@@ -3,7 +3,6 @@ package com.lee.quickgallery.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -180,10 +179,12 @@ private fun ZoomableImage(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var lastPanPosition by remember { mutableStateOf(Offset.Zero) }
+    var isDragging by remember { mutableStateOf(false) }
     
     // 상수들
     val minScale = 1f
-    val maxScale = 5f
+    val maxScale = 3f
     val zoomScale = 2f
     
     // 페이지가 변경되면 줌 상태 초기화
@@ -191,6 +192,8 @@ private fun ZoomableImage(
         if (!isCurrentPage) {
             scale = minScale
             offset = Offset.Zero
+            lastPanPosition = Offset.Zero
+            isDragging = false
             onZoomChanged(false)
         }
     }
@@ -215,7 +218,7 @@ private fun ZoomableImage(
                     translationY = offset.y
                 )
                 .pointerInput(Unit) {
-                    // 포인터 이벤트 직접 처리
+                    // 통합된 제스처 처리
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
@@ -224,35 +227,125 @@ private fun ZoomableImage(
                             
                             val touchPoints = event.changes
                             
-                            if (touchPoints.size >= 2) {
-                                // 두 손가락 핀치 줌
-                                val zoomChange = event.calculateZoom()
-                                val panChange = event.calculatePan()
-                                val centroid = event.calculateCentroid()
-                                
-                                val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
-                                
-                                val newOffset = if (newScale > minScale) {
-                                    val centerX = size.width / 2f
-                                    val centerY = size.height / 2f
-                                    Offset(
-                                        x = (offset.x + (centerX - centroid.x) * (zoomChange - 1)) * (newScale / scale),
-                                        y = (offset.y + (centerY - centroid.y) * (zoomChange - 1)) * (newScale / scale)
-                                    )
-                                } else {
-                                    Offset.Zero
+                            when {
+                                // 두 손가락 핀치 줌 처리
+                                touchPoints.size >= 2 -> {
+                                    val zoomChange = event.calculateZoom()
+                                    val panChange = event.calculatePan()
+                                    val centroid = event.calculateCentroid()
+                                    
+                                    val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+                                    
+                                    if (newScale > minScale) {
+                                        scale = newScale
+                                        
+                                        // 팬 처리 개선 - 더 빠른 반응
+                                        val maxOffsetX = (size.width * (scale - 1)) / 2f
+                                        val maxOffsetY = (size.height * (scale - 1)) / 2f
+                                        val oldOffset = offset
+                                        offset = Offset(
+                                            x = (offset.x + panChange.x).coerceIn(-maxOffsetX, maxOffsetX),
+                                            y = (offset.y + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                        )
+                                        
+
+                                    } else {
+                                        scale = minScale
+                                        offset = Offset.Zero
+                                    }
+                                    
+                                    // 핀치줌 중에는 드래그 상태 리셋
+                                    isDragging = false
                                 }
                                 
-                                scale = newScale
-                                offset = newOffset
+                                // 한 손가락 드래그 처리 (줌 상태에서만)
+                                touchPoints.size == 1 && scale > minScale -> {
+                                    val change = touchPoints[0]
+                                    
+                                    when (event.type) {
+                                        PointerEventType.Press -> {
+                                            lastPanPosition = change.position
+                                            isDragging = true
+                                        }
+                                        PointerEventType.Move -> {
+                                            if (isDragging) {
+                                                val currentPosition = change.position
+                                                val previousPosition = change.previousPosition
+                                                val panChange = currentPosition - previousPosition
+                                                
+                                                if (panChange != Offset.Zero) {
+                                                    // 손가락 움직임과 1:1 비율로 드래그 (속도 개선)
+                                                    val newOffsetX = offset.x + panChange.x
+                                                    val newOffsetY = offset.y + panChange.y
+                                                    
+                                                    // 이미지 경계를 벗어나지 않도록 제한
+                                                    val maxOffsetX = (size.width * (scale - 1)) / 2f
+                                                    val maxOffsetY = (size.height * (scale - 1)) / 2f
+                                                    
+                                                    offset = Offset(
+                                                        x = newOffsetX.coerceIn(-maxOffsetX, maxOffsetX),
+                                                        y = newOffsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                                    )
+                                                }
+                                                
+                                                // lastPanPosition 업데이트를 Move 이벤트 처리 후에 수행
+                                                lastPanPosition = currentPosition
+                                            }
+                                        }
+                                        PointerEventType.Release -> {
+                                            isDragging = false
+                                        }
+                                        else -> {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .pointerInput(Unit) {
+                    // 한 손가락 드래그 처리 (줌 상태에서만)
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            
+                            if (!isCurrentPage) continue
+                            
+                            val touchPoints = event.changes
+                            
+                            if (touchPoints.size == 1 && scale > minScale) {
+                                val change = touchPoints[0]
                                 
-                                if (scale > minScale) {
-                                    val maxOffsetX = (size.width * (scale - 1)) / 2f
-                                    val maxOffsetY = (size.height * (scale - 1)) / 2f
-                                    offset = Offset(
-                                        x = (offset.x + panChange.x).coerceIn(-maxOffsetX, maxOffsetX),
-                                        y = (offset.y + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-                                    )
+                                when (event.type) {
+                                    PointerEventType.Press -> {
+                                        lastPanPosition = change.position
+                                        isDragging = true
+                                    }
+                                    PointerEventType.Move -> {
+                                        if (isDragging) {
+                                            val currentPosition = change.position
+                                            val panChange = currentPosition - lastPanPosition
+                                            lastPanPosition = currentPosition
+                                            
+                                            if (panChange != Offset.Zero) {
+                                                // 손가락 움직임과 1:1 비율로 드래그 (속도 개선)
+                                                val newOffsetX = offset.x + panChange.x
+                                                val newOffsetY = offset.y + panChange.y
+                                                
+                                                // 이미지 경계를 벗어나지 않도록 제한
+                                                val maxOffsetX = (size.width * (scale - 1)) / 2f
+                                                val maxOffsetY = (size.height * (scale - 1)) / 2f
+                                                
+                                                offset = Offset(
+                                                    x = newOffsetX.coerceIn(-maxOffsetX, maxOffsetX),
+                                                    y = newOffsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    PointerEventType.Release -> {
+                                        isDragging = false
+                                    }
+                                    else -> {}
                                 }
                             }
                         }
@@ -262,7 +355,7 @@ private fun ZoomableImage(
                     // 더블 탭 제스처 처리 (한 손가락일 때만)
                     detectTapGestures(
                         onDoubleTap = { tapOffset ->
-                            if (isCurrentPage) {
+                            if (isCurrentPage && !isDragging) {
                                 if (scale > minScale) {
                                     // 줌 아웃
                                     scale = minScale
