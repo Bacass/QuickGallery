@@ -46,7 +46,7 @@ class ThumbnailCacheManager(private val context: Context) {
             
             // 캐시에서 먼저 확인
             if (cacheFile.exists()) {
-                Timber.tag(TAG).d("캐시에서 썸네일 로드: $mediaId")
+//                Timber.tag(TAG).d("캐시에서 썸네일 로드: $mediaId")
                 return@withContext Uri.fromFile(cacheFile)
             }
             

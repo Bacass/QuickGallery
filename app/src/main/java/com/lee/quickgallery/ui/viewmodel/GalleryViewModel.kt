@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import timber.log.Timber
+import android.content.IntentSender
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -50,6 +51,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _folderOrder = MutableStateFlow<List<String>>(emptyList())
     val folderOrder: StateFlow<List<String>> = _folderOrder.asStateFlow()
     
+    private val _pendingIntentSender = MutableStateFlow<IntentSender?>(null)
+    val pendingIntentSender: StateFlow<IntentSender?> = _pendingIntentSender
+    
     init {
         checkPermission()
     }
@@ -77,11 +81,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                Timber.tag(TAG).d("미디어 로딩 시작")
+                // 미디어 로딩 시작
                 val media = mediaStoreUtil.getAllMedia()
                 _mediaList.value = media
                 
-                Timber.tag(TAG).d("미디어 로딩 완료: ${media.size}개")
+                // 미디어 로딩 완료
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "미디어 로딩 중 오류 발생")
@@ -106,7 +110,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // 현재 설정된 정렬 방식 가져오기
                 val sortType = SortType.fromString(AppPrefs.mediaSortType)
                 
-                Timber.tag(TAG).d("폴더 로딩 시작, 정렬: ${sortType.displayName}")
+                // 폴더 로딩 시작
                 
                 // 이미지 수에 따라 캐시 크기 설정
                 val totalImageCount = mediaStoreUtil.getTotalImageCount()
@@ -123,7 +127,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // 폴더 순서 초기화 (저장된 순서 복원 또는 기본 순서)
                 initializeFolderOrder()
                 
-                Timber.tag(TAG).d("폴더 로딩 완료: ${folderItems.size}개, 정렬: ${sortType.displayName}")
+                // 폴더 로딩 완료
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "폴더 로딩 중 오류 발생")
@@ -145,7 +149,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val images = mediaStoreUtil.getAllImages()
                 _mediaList.value = images
                 
-                Timber.tag(TAG).d("이미지 로딩 완료: ${images.size}개")
+                // 이미지 로딩 완료
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "이미지 로딩 중 오류 발생")
@@ -167,7 +171,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val videos = mediaStoreUtil.getAllVideos()
                 _mediaList.value = videos
                 
-                Timber.tag(TAG).d("비디오 로딩 완료: ${videos.size}개")
+                // 비디오 로딩 완료
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "비디오 로딩 중 오류 발생")
@@ -189,7 +193,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // 현재 설정된 정렬 방식 가져오기
                 val sortType = SortType.fromString(AppPrefs.mediaSortType)
                 
-                Timber.tag(TAG).d("폴더별 미디어 로딩 시작: $folderPath, 정렬: ${sortType.displayName}, 강제새로고침: $forceRefresh")
+                // 폴더별 미디어 로딩 시작
                 
                 // 폴더별 전체 미디어 수와 실제 미디어를 병렬로 조회
                 val (media, totalCount) = coroutineScope {
@@ -202,7 +206,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _mediaList.value = media
                 _totalMediaCount.value = totalCount
                 
-                Timber.tag(TAG).d("폴더별 미디어 로딩 완료: ${media.size}개 (전체: ${totalCount}개), 정렬: ${sortType.displayName}")
+                // 폴더별 미디어 로딩 완료
                 
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "폴더별 미디어 로딩 중 오류 발생")
@@ -252,7 +256,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             currentOrder.add(toIndex, item)
             _folderOrder.value = currentOrder
             saveFolderOrder(currentOrder)
-            Timber.tag(TAG).d("폴더 순서 변경: $fromIndex -> $toIndex")
+            // 폴더 순서 변경
         }
     }
     
@@ -271,11 +275,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val newFolders = currentFolderPaths.filter { it !in validOrder }
                 val finalOrder = validOrder + newFolders
                 _folderOrder.value = finalOrder
-                Timber.tag(TAG).d("저장된 폴더 순서 복원: ${finalOrder.size}개")
+                // 저장된 폴더 순서 복원
             } else {
                 // 저장된 순서가 없으면 기본 순서 사용
                 _folderOrder.value = currentFolderPaths
-                Timber.tag(TAG).d("기본 폴더 순서 초기화: ${currentFolderPaths.size}개")
+                // 기본 폴더 순서 초기화
             }
         }
     }
@@ -284,7 +288,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private fun saveFolderOrder(folderOrder: List<String>) {
         val orderString = folderOrder.joinToString(",")
         AppPrefs.folderOrder = orderString
-        Timber.tag(TAG).d("폴더 순서 저장: ${folderOrder.size}개")
+        // 폴더 순서 저장
     }
     
     // 폴더 순서 복원
@@ -318,15 +322,34 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                Timber.tag(TAG).d("미디어 이동 시작: ${mediaItems.size}개 -> $targetFolderPath")
+                // 미디어 이동 시작
                 
                 // 실제 파일 시스템에서 이동 작업 수행
-                val successCount = mediaStoreUtil.moveMediaItems(mediaItems, targetFolderPath)
+                val successCount = mediaStoreUtil.moveMediaItems(mediaItems, targetFolderPath, onRecoverableAction = { intentSender ->
+                    _pendingIntentSender.value = intentSender
+                })
                 
                 if (successCount > 0) {
-                    Timber.tag(TAG).d("미디어 이동 완료: ${successCount}개")
+                    // 미디어 이동 완료
+                    
+                    // 잠시 대기 후 새로고침 (MediaStore 업데이트 시간 확보)
+                    kotlinx.coroutines.delay(1000)
+                    
                     // 현재 폴더의 미디어 목록 새로고침
-                    loadMediaByFolder(mediaItems.firstOrNull()?.relativePath ?: "")
+                    val currentFolderPath = mediaItems.firstOrNull()?.relativePath ?: ""
+                    if (currentFolderPath.isNotEmpty()) {
+                        loadMediaByFolder(currentFolderPath, forceRefresh = true)
+                    }
+                    
+                    // 폴더 목록도 새로고침 (미디어 개수 변경 가능성)
+                    loadFolders()
+                    
+                    Timber.tag(TAG).d("미디어 이동 완료: ${successCount}개")
+                    
+                    // 권한 부족으로 일부 파일이 복사만 된 경우 알림
+                    if (successCount < mediaItems.size) {
+                        _errorMessage.value = "${successCount}개 파일이 이동되었습니다. 일부 파일은 권한 부족으로 복사만 되었습니다."
+                    }
                 } else {
                     _errorMessage.value = "미디어 이동에 실패했습니다."
                 }
@@ -347,15 +370,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                Timber.tag(TAG).d("미디어 복사 시작: ${mediaItems.size}개 -> $targetFolderPath")
+                // 미디어 복사 시작
                 
                 // 실제 파일 시스템에서 복사 작업 수행
                 val successCount = mediaStoreUtil.copyMediaItems(mediaItems, targetFolderPath)
                 
                 if (successCount > 0) {
-                    Timber.tag(TAG).d("미디어 복사 완료: ${successCount}개")
+                    // 미디어 복사 완료
+                    
+                    // 잠시 대기 후 새로고침 (MediaStore 업데이트 시간 확보)
+                    kotlinx.coroutines.delay(1000)
+                    
                     // 폴더 목록 새로고침 (미디어 개수 변경 가능성)
                     loadFolders()
+                    
+                    Timber.tag(TAG).d("미디어 복사 완료: ${successCount}개")
                 } else {
                     _errorMessage.value = "미디어 복사에 실패했습니다."
                 }
@@ -376,17 +405,32 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = true
                 _errorMessage.value = null
                 
-                Timber.tag(TAG).d("미디어 삭제 시작: ${mediaItems.size}개")
+                // 미디어 삭제 시작
                 
                 // 실제 파일 시스템에서 삭제 작업 수행
-                val successCount = mediaStoreUtil.deleteMediaItems(mediaItems)
+                val successCount = mediaStoreUtil.deleteMediaItems(mediaItems, onRecoverableAction = { intentSender ->
+                    _pendingIntentSender.value = intentSender
+                })
                 
                 if (successCount > 0) {
                     Timber.tag(TAG).d("미디어 삭제 완료: ${successCount}개")
+                    
+                    // 잠시 대기 후 새로고침 (MediaStore 업데이트 시간 확보)
+                    kotlinx.coroutines.delay(1000)
+                    
                     // 현재 폴더의 미디어 목록 새로고침
-                    loadMediaByFolder(mediaItems.firstOrNull()?.relativePath ?: "")
+                    val currentFolderPath = mediaItems.firstOrNull()?.relativePath ?: ""
+                    if (currentFolderPath.isNotEmpty()) {
+                        loadMediaByFolder(currentFolderPath, forceRefresh = true)
+                    }
+                    
                     // 폴더 목록 새로고침 (미디어 개수 변경)
                     loadFolders()
+                    
+                    // 권한 부족으로 일부 파일이 삭제되지 않은 경우 알림
+                    if (successCount < mediaItems.size) {
+                        _errorMessage.value = "${successCount}개 파일이 삭제되었습니다. 일부 파일은 권한 부족으로 삭제되지 않았습니다."
+                    }
                 } else {
                     _errorMessage.value = "미디어 삭제에 실패했습니다."
                 }
@@ -398,5 +442,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _isLoading.value = false
             }
         }
+    }
+
+    fun clearPendingIntentSender() {
+        _pendingIntentSender.value = null
     }
 } 

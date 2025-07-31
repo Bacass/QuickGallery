@@ -2,6 +2,9 @@ package com.lee.quickgallery.ui
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -252,6 +255,21 @@ fun SubListScreen(
         showDeleteConfirmDialog = false
     }
     
+    val pendingIntentSender by viewModel.pendingIntentSender.collectAsState()
+    val intentSenderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        // 권한 허용 후 재시도 로직 필요시 여기에 추가
+        viewModel.clearPendingIntentSender()
+    }
+    LaunchedEffect(pendingIntentSender) {
+        pendingIntentSender?.let { intentSender ->
+            intentSenderLauncher.launch(
+                IntentSenderRequest.Builder(intentSender).build()
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -595,7 +613,7 @@ fun SubListScreen(
                                                         val targetIndex = (progress * (mediaList.size - 1).coerceAtLeast(0)).toInt()
                                                             .coerceIn(0, mediaList.size - 1)
                                                         
-                                                        println("DEBUG: Tap at offset: $offset, progress: $progress, targetIndex: $targetIndex")
+                                                        // Tap 스크롤 처리
                                                         coroutineScope.launch {
                                                             gridState.animateScrollToItem(targetIndex)
                                                         }
@@ -624,7 +642,7 @@ fun SubListScreen(
                                                     val safeRange = (containerHeightPx - thumbHeightPx).coerceAtLeast(0f)
                                                     val actualThumbPosition = currentScrollProgress * safeRange
                                                     
-                                                    println("DEBUG: Drag started at offset: $offset, actualThumbPosition: $actualThumbPosition, scrollProgress: $currentScrollProgress")
+                                                    // 드래그 시작
                                                     isScrollbarDragging = true
                                                     isTouchDragging = true
                                                     showScrollbar = true
@@ -634,7 +652,7 @@ fun SubListScreen(
                                                     dragCurrentY = actualThumbPosition
                                                 },
                                                 onDragEnd = {
-                                                    println("DEBUG: Drag ended")
+                                                    // 드래그 종료
                                                     isScrollbarDragging = false
                                                     isTouchDragging = false
                                                     // 드래그 상태 리셋
@@ -659,7 +677,7 @@ fun SubListScreen(
                                                         val targetIndex = (progress * (mediaList.size - 1).coerceAtLeast(0)).toInt()
                                                             .coerceIn(0, mediaList.size - 1)
                                                         
-                                                        println("DEBUG: dragAmount: $dragAmount, dragCurrentY: $dragCurrentY, progress: $progress, targetIndex: $targetIndex")
+                                                        // 드래그 진행
                                                         
                                                         coroutineScope.launch {
                                                             gridState.scrollToItem(targetIndex)
@@ -715,6 +733,7 @@ fun SubListScreen(
         if (showFolderSelectionDialog) {
             FolderSelectionDialog(
                 folderList = folderList,
+                currentFolderPath = folderPath,
                 onFolderSelected = handleFolderSelection,
                 onDismiss = { 
                     showFolderSelectionDialog = false
@@ -752,41 +771,76 @@ fun SubListScreen(
 @Composable
 fun FolderSelectionDialog(
     folderList: List<com.lee.quickgallery.model.FolderItem>,
+    currentFolderPath: String,
     onFolderSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("폴더 선택") },
+        title = { 
+            Text(
+                text = "폴더 선택",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column {
-                folderList.forEach { folder ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clickable { onFolderSelected(folder.folderPath) },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                val availableFolders = folderList.filter { it.folderPath != currentFolderPath }
+                
+                if (availableFolders.isEmpty()) {
+                    Text(
+                        text = "이동할 수 있는 다른 폴더가 없습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    availableFolders.forEach { folder ->
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(vertical = 4.dp)
+                                .clickable { onFolderSelected(folder.folderPath) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Text(
-                                text = folder.folderName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            Text(
-                                text = "${folder.mediaCount}개",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = folder.folderName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = folder.folderPath,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${folder.mediaCount}개",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
