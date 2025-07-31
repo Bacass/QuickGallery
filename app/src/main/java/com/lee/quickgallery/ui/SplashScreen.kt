@@ -19,6 +19,19 @@ import androidx.compose.ui.unit.sp
 import com.lee.quickgallery.R
 import com.lee.quickgallery.util.PermissionUtil
 import kotlinx.coroutines.delay
+import android.net.Uri
+import android.content.Context
+
+fun hasSAFPermission(context: Context): Boolean {
+    val prefs = context.getSharedPreferences("saf", Context.MODE_PRIVATE)
+    val uriString = prefs.getString("gallery_folder_uri", null)
+    if (uriString != null) {
+        val uri = Uri.parse(uriString)
+        val perms = context.contentResolver.persistedUriPermissions
+        return perms.any { it.uri == uri && it.isReadPermission && it.isWritePermission }
+    }
+    return false
+}
 
 @Composable
 fun SplashScreen(
@@ -31,7 +44,7 @@ fun SplashScreen(
         delay(1500L) // 1.5초 대기
         
         // 권한이 이미 있는지 확인
-        if (PermissionUtil.hasRequiredPermissions(context)) {
+        if (PermissionUtil.hasRequiredPermissions(context) && hasSAFPermission(context)) {
             onPermissionAlreadyGranted()
         } else {
             onSplashComplete()
